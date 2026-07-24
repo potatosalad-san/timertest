@@ -283,11 +283,10 @@
                             
                             <!-- 月曜日 〜 日曜日 -->
                             <template id="weekly-header-template">
-                                <div class="p-1 flex flex-col justify-between">
+                                <div class="p-1 flex flex-col justify-between items-center">
                                     <div class="day-title font-black text-[10px]">6/15 (月)</div>
-                                    <div class="grid grid-cols-2 gap-0.5 text-[8px] mt-1 border-t pt-1 border-slate-100 font-semibold">
-                                        <div class="text-indigo-600 bg-indigo-50 rounded-sm">予定(P)</div>
-                                        <div class="text-emerald-700 bg-emerald-50 rounded-sm">実績(A)</div>
+                                    <div class="text-[8px] mt-1 border-t pt-1 border-slate-100 font-semibold text-slate-500 w-full text-center">
+予定 / 実績
                                     </div>
                                 </div>
                             </template>
