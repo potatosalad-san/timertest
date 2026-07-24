@@ -1,0 +1,2420 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>学習予定＆実績可視化アプリ Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght=300;400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            user-select: none; /* なぞり塗り中のテキスト選択を防ぐ */
+            -webkit-user-select: none;
+        }
+        /* スムーズで美しいスクロールバー */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* タブレット向けペイント用のタッチアクション最適化 */
+        .paint-cell {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col overflow-x-hidden">
+
+    <!-- ヘッダー -->
+    <header class="bg-gradient-to-r from-indigo-600 to-violet-700 text-white shadow-md relative z-20">
+        <div class="max-w-full mx-auto px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/20 p-2 rounded-xl backdrop-blur-sm">
+                    <i data-lucide="graduation-cap" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-black text-white leading-tight">学習予定＆実績可視化アプリ Pro</h1>
+                    <p class="text-[10px] text-indigo-100 font-medium">iPad & タブレット最適化バーチカル版 (自動保存オン)</p>
+                </div>
+            </div>
+            
+            <!-- 中央の年月切替 -->
+            <div class="flex items-center gap-2 bg-white/10 p-1 rounded-xl backdrop-blur-sm relative">
+                <button onclick="changeMonth(-1)" class="p-1 hover:bg-white/20 rounded-lg transition text-white">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </button>
+                <button onclick="toggleGlobalMonthPicker(event)" id="currentMonthLabelBtn" class="font-bold px-3 py-1 rounded-lg text-xs hover:bg-white/20 transition flex items-center gap-1.5 text-white">
+                    <span id="currentMonthLabel">2026年6月</span>
+                    <i data-lucide="calendar" class="w-3.5 h-3.5 opacity-90"></i>
+                </button>
+                <button onclick="changeMonth(1)" class="p-1 hover:bg-white/20 rounded-lg transition text-white">
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+
+                <!-- 年月クイック選択パネル -->
+                <div id="globalMonthPickerPanel" class="absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 hidden z-50 w-64 text-slate-800">
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 mb-1">年を選択</label>
+                            <select id="pickerYearSelect" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <option value="2025">2025年</option>
+                                <option value="2026" selected>2026年</option>
+                                <option value="2027">2027年</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 mb-1">月を選択</label>
+                            <div id="monthPickerGrid" class="grid grid-cols-4 gap-1.5"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ナビゲーションタブ -->
+    <div class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+        <div class="max-w-full mx-auto px-4 sm:px-6">
+            <nav class="flex justify-start gap-1 sm:gap-4 overflow-x-auto py-1" aria-label="Tabs">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn py-3 px-3 inline-flex items-center gap-1.5 border-b-2 border-indigo-600 font-bold text-xs sm:text-sm text-indigo-600 transition-all duration-150 shrink-0">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                    <span>ダッシュボード</span>
+                </button>
+                <button onclick="switchTab('weekly')" id="tab-weekly" class="tab-btn py-3 px-3 inline-flex items-center gap-1.5 border-b-2 border-transparent font-medium text-xs sm:text-sm text-slate-500 hover:text-slate-700 transition-all duration-150 shrink-0">
+                    <i data-lucide="book-open" class="w-4 h-4 text-indigo-500 animate-pulse"></i>
+                    <span class="font-bold">週間バーチカル (Weekly)</span>
+                </button>
+                <button onclick="switchTab('daily')" id="tab-daily" class="tab-btn py-3 px-3 inline-flex items-center gap-1.5 border-b-2 border-transparent font-medium text-xs sm:text-sm text-slate-500 hover:text-slate-700 transition-all duration-150 shrink-0">
+                    <i data-lucide="clock" class="w-4 h-4"></i>
+                    <span>日次スケジュール (Daily)</span>
+                </button>
+                <button onclick="switchTab('monthly')" id="tab-monthly" class="tab-btn py-3 px-3 inline-flex items-center gap-1.5 border-b-2 border-transparent font-medium text-xs sm:text-sm text-slate-500 hover:text-slate-700 transition-all duration-150 shrink-0">
+                    <i data-lucide="calendar" class="w-4 h-4"></i>
+                    <span>月間進捗表</span>
+                </button>
+                <button onclick="switchTab('timer')" id="tab-timer" class="tab-btn py-3 px-3 inline-flex items-center gap-1.5 border-b-2 border-transparent font-medium text-xs sm:text-sm text-slate-500 hover:text-slate-700 transition-all duration-150 shrink-0">
+                    <i data-lucide="timer" class="w-4 h-4"></i>
+                    <span>学習タイマー</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-grow max-w-full w-full mx-auto p-3 sm:p-5">
+        
+        <!-- ================= ダッシュボードタブ ================= -->
+        <section id="content-dashboard" class="tab-content space-y-4">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3">
+                    <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                        <i data-lucide="clock" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold">今月の総学習時間</p>
+                        <h3 class="text-lg sm:text-xl font-black mt-0.5 text-slate-800" id="stat-total-time">0時間</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3">
+                    <div class="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                        <i data-lucide="calendar-check" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold">学習を記録した日数</p>
+                        <h3 class="text-lg sm:text-xl font-black mt-0.5 text-slate-800" id="stat-active-days">0日</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3">
+                    <div class="p-2.5 bg-amber-50 text-amber-600 rounded-lg">
+                        <i data-lucide="target" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold">今日の予定達成率</p>
+                        <h3 class="text-lg sm:text-xl font-black mt-0.5 text-slate-800" id="stat-today-completion">0%</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3">
+                    <div class="p-2.5 bg-violet-50 text-violet-600 rounded-lg">
+                        <i data-lucide="book-open" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold">登録教科数</p>
+                        <h3 class="text-lg sm:text-xl font-black mt-0.5 text-slate-800" id="stat-subjects-count">5教科</h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <!-- 教科別バランス -->
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <h4 class="text-xs font-black text-slate-700 flex items-center gap-2 mb-3">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-500"></i>
+                        教科別学習バランス
+                    </h4>
+                    <div class="relative h-48 flex items-center justify-center">
+                        <canvas id="subjectPieChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 進捗グラフ -->
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm lg:col-span-2">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-xs font-black text-slate-700 flex items-center gap-2">
+                            <i data-lucide="trending-up" class="w-4 h-4 text-indigo-500"></i>
+                            学習時間の推移
+                        </h4>
+                        <div class="inline-flex bg-slate-100 p-1 rounded-lg">
+                            <button onclick="setTrendViewMode('week')" id="trendModeWeek" class="px-2.5 py-1 text-[10px] font-bold rounded text-slate-500 transition-all">週別</button>
+                            <button onclick="setTrendViewMode('month')" id="trendModeMonth" class="px-2.5 py-1 text-[10px] font-bold rounded bg-white text-slate-800 shadow-sm transition-all">月別</button>
+                            <button onclick="setTrendViewMode('year')" id="trendModeYear" class="px-2.5 py-1 text-[10px] font-bold rounded text-slate-500 transition-all">年間</button>
+                        </div>
+                    </div>
+                    <div class="relative h-48">
+                        <canvas id="dailyTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 教科リスト & アドバイス -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <div class="flex justify-between items-center mb-2.5">
+                        <h4 class="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                            <i data-lucide="bookmark" class="w-4 h-4 text-indigo-500"></i>
+                            登録中の教科設定
+                        </h4>
+                        <span class="text-[9px] text-slate-400 font-bold">※カラーをクリックして変更可能</span>
+                    </div>
+                    <div id="dashboardSubjectsList" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1"></div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-xs font-black text-slate-700 mb-2 flex items-center gap-1.5">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+                            学習アシストアドバイス
+                        </h4>
+                        <div class="p-3 bg-gradient-to-br from-indigo-50/50 to-pink-50/50 rounded-xl border border-indigo-100/50">
+                            <p class="text-xs text-slate-600 leading-relaxed font-medium" id="dashboardTips">アドバイスをロード中...</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between border-t border-slate-100 pt-2.5 mt-2 text-[10px] text-slate-400">
+                        <span>プランナーAI推奨</span>
+                        <button onclick="generateNewTip()" class="text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>次のヒント
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 週間計画シートタブ (最適化) ================= -->
+        <section id="content-weekly" class="tab-content hidden space-y-4">
+            <!-- 週間コントロール -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white p-3 rounded-xl border border-slate-150 shadow-sm">
+                <div>
+                    <h2 class="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="book-open" class="w-4 h-4 text-indigo-500"></i>
+                        1週間バーチカル学習手帳 (Weekly Planner)
+                    </h2>
+                    <p class="text-[10px] text-slate-400 mt-0.5">時間枠をなぞる（タッチドラッグ）だけで一気にペイント可能！</p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <!-- ブラシパレット -->
+                    <div id="weeklyBrushPaletteContainer" class="flex flex-wrap gap-1"></div>
+                    
+                    <!-- 週移動 -->
+                    <div class="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
+                        <button onclick="navigateWeeklyWeek(-1)" class="p-1 hover:bg-white rounded transition text-slate-700">
+                            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <span id="weeklyWeekRangeLabel" class="font-bold text-[10px] text-slate-700 px-2">2026/6/15 〜 6/21</span>
+                        <button onclick="navigateWeeklyWeek(1)" class="p-1 hover:bg-white rounded transition text-slate-700">
+                            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- システム手帳型見開き（iPad 10th 横幅フィット設計） -->
+            <div class="bg-indigo-50/10 rounded-2xl p-2 sm:p-3.5 border border-slate-200 shadow-md relative overflow-x-auto">
+                <div class="min-w-[1000px] bg-white rounded-xl border border-slate-200 shadow overflow-hidden">
+                    
+                    <!-- 上部ヘッダー（今週のゴール & 振り返り） -->
+                    <div class="grid grid-cols-12 gap-3 p-3 bg-slate-50 border-b border-slate-200">
+                        <div class="col-span-2 bg-indigo-50 border border-indigo-100 rounded-lg p-2 flex flex-col justify-center items-center">
+                            <span class="text-xl font-black text-indigo-600 font-mono" id="weeklyPageMonthLabel">6</span>
+                            <span class="text-[8px] font-black text-indigo-500">MONTH</span>
+                        </div>
+                        <div class="col-span-5 space-y-1">
+                            <span class="text-[8px] font-black text-slate-400 tracking-wider">今週の学習目標 (WEEKLY GOAL)</span>
+                            <input type="text" id="weeklyGoalInput" onchange="appData.weeklyGoals[currentWeekKey] = this.value; saveAllData(true);" placeholder="例: 苦手単語の克服と数学応用問題の徹底マスター" class="w-full bg-white border border-slate-200 rounded p-1 text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div class="col-span-3 space-y-1">
+                            <span class="text-[8px] font-black text-slate-400 tracking-wider">今週の振り返り (WEEK IN REVIEW)</span>
+                            <input type="text" id="weeklyReviewInput" onchange="appData.weeklyReviews[currentWeekKey] = this.value; saveAllData(true);" placeholder="例: 英語はクリア。数学は時間不足だったため来週に補強。" class="w-full bg-white border border-slate-200 rounded p-1 text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div class="col-span-2 bg-emerald-50 border border-emerald-100 rounded-lg p-2 flex flex-col justify-center items-center">
+                            <span class="text-sm font-black text-emerald-700 font-mono" id="weeklyTotalTimeLabel">00h 00m</span>
+                            <span class="text-[8px] font-black text-emerald-500">WEEKLY TOTAL</span>
+                        </div>
+                    </div>
+
+                    <!-- 本体の週間バーチカルグリッド（7列が横一列に並ぶ） -->
+                    <div class="relative overflow-hidden">
+                        
+                        <!-- 曜日名ヘッダー列 -->
+                        <div class="grid grid-cols-[38px_repeat(7,_1fr)] border-b border-slate-200 text-center font-bold text-[10px] bg-slate-50 divide-x divide-slate-200">
+                            <!-- 空白のコーナー -->
+                            <div class="py-1.5 text-slate-400">時間</div>
+                            
+                            <!-- 月曜日 〜 日曜日 -->
+                            <template id="weekly-header-template">
+                                <div class="p-1 flex flex-col justify-between">
+                                    <div class="day-title font-black text-[10px]">6/15 (月)</div>
+                                    <div class="grid grid-cols-2 gap-0.5 text-[8px] mt-1 border-t pt-1 border-slate-100 font-semibold">
+                                        <div class="text-indigo-600 bg-indigo-50 rounded-sm">予定(P)</div>
+                                        <div class="text-emerald-700 bg-emerald-50 rounded-sm">実績(A)</div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div id="weeklyHeadersContainer" class="col-span-7 grid grid-cols-7 divide-x divide-slate-200" style="display: contents;"></div>
+                        </div>
+
+                        <!-- 縦スクロール兼固定バーチカルエリア（5:00〜24:00 19時間 = 38枠） -->
+                        <div class="max-h-[500px] overflow-y-auto" id="weeklyTimelineScrollContainer">
+                            <div class="grid grid-cols-[38px_repeat(7,_1fr)] divide-x divide-slate-150" id="weeklyGridBody">
+                                <!-- 時間軸の列 -->
+                                <div class="flex flex-col bg-slate-50/50 font-mono text-[9px] text-slate-400 text-center select-none" id="weeklyTimeAxis"></div>
+                                
+                                <!-- 月〜日のグリッド列 -->
+                                <div id="weeklyColumnsWrapper" class="col-span-7 grid grid-cols-7 divide-x divide-slate-150"></div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 日次スケジュール (Daily) ================= -->
+        <section id="content-daily" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
+                    <div>
+                        <h2 class="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                            <i data-lucide="clock" class="w-4 h-4 text-indigo-500"></i>
+                            日次計画＆バーチカル時間記録 (Daily)
+                        </h2>
+                        <p class="text-[10px] text-slate-400 mt-0.5">週間バーチカル側と完全同期！時間枠をスワイプして一気にペイント可能です。</p>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <!-- 日移動 -->
+                        <div class="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                            <button onclick="navigateDailyDay(-1)" class="p-1 hover:bg-white rounded transition text-slate-700">
+                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            </button>
+                            <button id="dailyCalendarBtn" onclick="toggleDailyCalendarPopup(event)" class="bg-white px-2 py-1 rounded text-xs font-bold flex items-center gap-1 hover:bg-slate-50 transition shadow-sm border border-slate-200">
+                                <i data-lucide="calendar" class="w-3.5 h-3.5 text-indigo-600"></i>
+                                <span id="selectedDayLabel">15日</span>
+                                <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+                            </button>
+                            
+                            <!-- 日付選択ポップアップ -->
+                            <div id="dailyCalendarDropdown" class="absolute right-4 md:right-auto top-32 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 hidden z-50 w-72 text-slate-800">
+                                <div class="flex justify-between items-center mb-2">
+                                    <button onclick="navigateCalendarMonth(-1, event)" class="p-1 hover:bg-slate-100 rounded transition"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                                    <span id="calendarDropdownMonthLabel" class="font-black text-xs">2026年6月</span>
+                                    <button onclick="navigateCalendarMonth(1, event)" class="p-1 hover:bg-slate-100 rounded transition"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                                </div>
+                                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-black text-slate-400 mb-1 border-b pb-1">
+                                    <div class="text-rose-500">日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div class="text-sky-500">土</div>
+                                </div>
+                                <div id="calendarGridContainer" class="grid grid-cols-7 gap-1 text-center"></div>
+                                <div class="mt-2 pt-2 border-t flex justify-between items-center text-[9px] text-slate-400">
+                                    <span class="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full" id="calendarTodayIndicator">今日: 28日</span>
+                                    <button onclick="jumpToTodayInCalendar(event)" class="text-indigo-600 hover:underline font-bold">今日に戻る</button>
+                                </div>
+                            </div>
+
+                            <button onclick="navigateDailyDay(1)" class="p-1 hover:bg-white rounded transition text-slate-700">
+                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1日分の詳細デザイン -->
+                <div class="border border-slate-200 rounded-xl bg-indigo-50/5 p-3 space-y-4 max-w-full">
+                    
+                    <!-- サマリーヘッダー -->
+                    <div class="grid grid-cols-1 md:grid-cols-12 border border-slate-300 rounded-lg overflow-hidden text-xs bg-white shadow-sm">
+                        <div class="md:col-span-2 bg-slate-800 text-white font-black py-3 flex flex-col justify-center items-center">
+                            <span class="text-lg" id="dailyLogDateLabel">15日</span>
+                            <span class="text-[9px]" id="dailyLogWeekDayLabel">(月)</span>
+                        </div>
+                        <div class="md:col-span-10 grid grid-cols-3 divide-x divide-slate-200 text-slate-700 text-center font-bold">
+                            <div class="p-2.5">
+                                <span class="text-[9px] text-slate-400 block mb-0.5">目標時間</span>
+                                <div class="flex items-baseline justify-center gap-0.5">
+                                    <input type="number" id="dailyPlannedTotal" placeholder="0" class="w-10 text-center font-bold text-sm bg-slate-50 border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500 text-indigo-700" onchange="calculateDailySummary(); saveAllData(true); renderWeeklyView();">
+                                    <span class="text-[9px]">h</span>
+                                </div>
+                            </div>
+                            <div class="p-2.5">
+                                <span class="text-[9px] text-emerald-600 block mb-0.5">実績時間</span>
+                                <div class="text-emerald-700"><span id="dailyActualTotal" class="text-sm font-extrabold">0.0</span> <span class="text-[9px]">h</span></div>
+                            </div>
+                            <div class="p-2.5 bg-indigo-50/20">
+                                <span class="text-[9px] text-indigo-700 block mb-0.5">総計実績（分）</span>
+                                <div class="text-indigo-800"><span id="dailyCumulativeTotal" class="text-sm font-extrabold">0</span> <span class="text-[9px]">分</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- パレットブラシ -->
+                    <div class="p-2.5 bg-white border border-slate-200 rounded-lg shadow-sm">
+                        <div class="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                            <i data-lucide="palette" class="w-4 h-4 text-indigo-600"></i>
+                            <span>ブラシ(教科)を選択:</span>
+                        </div>
+                        <div id="brushPaletteContainer" class="flex flex-wrap gap-1"></div>
+                    </div>
+
+                    <!-- 日次バーチカル (1日詳細) -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                        
+                        <!-- 1日バーチカル（2列Plan/Actual） -->
+                        <div class="lg:col-span-4 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                            <div class="grid grid-cols-12 bg-slate-100 border-b text-center font-bold py-1.5 text-[10px] text-slate-600">
+                                <div class="col-span-3">時間</div>
+                                <div class="col-span-4 text-indigo-600">予定 (P)</div>
+                                <div class="col-span-5 text-emerald-700">実績 (A)</div>
+                            </div>
+                            <!-- スクロールエリア（週間と同じ時間幅5:00〜24:00） -->
+                            <div id="dailyTimelinesContainer" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto"></div>
+                        </div>
+
+                        <!-- 教科目標 & メモ -->
+                        <div class="lg:col-span-8 space-y-3">
+                            <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2.5">
+                                <h5 class="font-black text-xs text-slate-700 flex items-center gap-1 border-b pb-1.5">
+                                    <i data-lucide="list-todo" class="w-4 h-4 text-indigo-500"></i>
+                                    教科ごとの進捗内容
+                                </h5>
+                                <div id="dailySubjectsContainer" class="space-y-2 max-h-[240px] overflow-y-auto pr-1"></div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                    <h5 class="font-black text-xs text-slate-700 flex items-center gap-1 mb-2">
+                                        <i data-lucide="message-square" class="w-4 h-4 text-emerald-500"></i>
+                                        反省・一言メモ
+                                    </h5>
+                                    <textarea id="dailyReflection" rows="3" placeholder="今日の反省やメモを自由に記録できます" class="w-full p-2 bg-slate-50 border rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none font-bold" onchange="saveAllData(true); renderWeeklyView();"></textarea>
+                                </div>
+                                <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col justify-between">
+                                    <h5 class="font-black text-xs text-slate-700 flex items-center gap-1 mb-1">
+                                        <i data-lucide="star" class="w-4 h-4 text-amber-500"></i>
+                                        自己評価
+                                    </h5>
+                                    <div class="flex items-center justify-around gap-2 my-2">
+                                        <button onclick="setEvaluation(3)" id="evalBtn3" class="eval-btn flex flex-col items-center p-1.5 rounded-lg border w-12 hover:scale-105 transition-all bg-white text-xs">
+                                            <span>😆</span>
+                                            <span class="text-[8px] mt-0.5 font-bold text-slate-500">完璧</span>
+                                        </button>
+                                        <button onclick="setEvaluation(2)" id="evalBtn2" class="eval-btn flex flex-col items-center p-1.5 rounded-lg border w-12 hover:scale-105 transition-all bg-white text-xs">
+                                            <span>🙂</span>
+                                            <span class="text-[8px] mt-0.5 font-bold text-slate-500">まずまず</span>
+                                        </button>
+                                        <button onclick="setEvaluation(1)" id="evalBtn1" class="eval-btn flex flex-col items-center p-1.5 rounded-lg border w-12 hover:scale-105 transition-all bg-white text-xs">
+                                            <span>😞</span>
+                                            <span class="text-[8px] mt-0.5 font-bold text-slate-500">要改善</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 月間進捗データタブ ================= -->
+        <section id="content-monthly" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                <div class="flex justify-between items-center gap-2 mb-4">
+                    <div>
+                        <h2 class="text-sm font-black text-slate-800 flex items-center gap-1.5" id="monthlyTitle">n月の学習進捗表</h2>
+                        <p class="text-[10px] text-slate-400 mt-0.5">日付ごとに実施内容を直接入力できます。</p>
+                    </div>
+                    <button onclick="openAddSubjectModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold">
+                        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                        教科を追加
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                    <table class="w-full text-center border-collapse min-w-[700px] text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 border-b">
+                                <th class="py-2 px-3 text-slate-500 font-bold w-16">日</th>
+                                <th id="customHeadersContainer" class="p-0" style="display: contents;"></th>
+                                <th class="py-2 px-3 text-slate-500 font-bold w-48">自由メモ・トピック</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthlyTableBody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= タイマータブ ================= -->
+        <section id="content-timer" class="tab-content hidden space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 max-w-full">
+                <div class="md:col-span-5 space-y-3">
+                    <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 p-4 space-y-2.5">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-black text-indigo-800 flex items-center gap-1">
+                                <i data-lucide="brain" class="w-4 h-4 text-pink-500 animate-pulse"></i>
+                                ポモドーロ・サイクル設定
+                            </span>
+                        </div>
+                        <button onclick="setPomodoroTechnique()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-lg font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            ポモドーロテクニックを即時セット (25分集中+ループON)
+                        </button>
+                        <div class="flex items-center justify-between bg-white/60 p-2 rounded-lg border border-indigo-100/50">
+                            <span class="text-[10px] font-bold text-slate-700">サイクルを自動ループする</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="pomodoroAutoLoopToggle" onchange="toggleAutoLoopSetting(this.checked)" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">マイタイマー一覧</span>
+                        <div id="customTimerSlotsContainer" class="space-y-2"></div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+                        <span class="text-[10px] font-black text-slate-400 block">計測対象の教科を選択</span>
+                        <div id="classificationListContainer" class="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+
+                <div class="md:col-span-7 flex flex-col justify-between bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">
+                        <span class="text-slate-400 text-[10px] font-bold">現在の選択状態:</span>
+                        <div class="flex items-center justify-center gap-1.5 text-xs font-black text-slate-800 mt-1">
+                            <span id="summaryModeLabel" class="text-indigo-600">集中 [25分]</span>
+                            <span>|</span>
+                            <span id="summarySubjectLabel">国語</span>
+                        </div>
+                    </div>
+
+                    <div class="p-6 bg-slate-900 text-white rounded-xl text-center space-y-1.5 shadow-inner">
+                        <span id="bigTimerTitle" class="block text-[8px] font-black text-indigo-400 uppercase tracking-wider">READY TO STUDY</span>
+                        <span id="bigTimerDisplay" class="font-mono text-4xl sm:text-5xl font-black tracking-widest text-slate-100 block">25:00</span>
+                        <div id="mainTimerOvertimeLabel" class="text-rose-500 font-bold text-[10px] mt-1 hidden animate-pulse">制限時間を超過して学習中！</div>
+                    </div>
+
+                    <button onclick="startFullscreenTimer()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-1.5">
+                        <i data-lucide="play" class="w-4 h-4"></i>
+                        タイマーをスタート（全画面表示）
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- フルスクリーンタイマー -->
+    <div id="fullscreenTimerOverlay" class="fixed inset-0 bg-slate-950 z-50 flex flex-col justify-between p-6 hidden transition-all select-none">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <span id="fullscreenDotIndicator" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="fullscreenSubjectLabel" class="text-xs font-black text-slate-400 tracking-wider">国語 集中時間</span>
+            </div>
+            <button onclick="quitFullscreenTimerConfirm()" class="p-2 text-slate-400 hover:text-white bg-slate-900 border border-slate-850 rounded-full transition-all">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <div class="flex flex-col items-center justify-center space-y-4">
+            <div class="relative w-48 h-48 sm:w-64 sm:h-64 flex items-center justify-center">
+                <svg class="absolute inset-0 w-full h-full transform -rotate-90">
+                    <circle cx="50%" cy="50%" r="42%" class="stroke-slate-900" stroke-width="4" fill="transparent" />
+                    <circle id="fullscreenProgressRing" cx="50%" cy="50%" r="42%" class="stroke-indigo-500 transition-all duration-300" stroke-width="5" fill="transparent" stroke-linecap="round" stroke-dasharray="800" stroke-dashoffset="0" />
+                </svg>
+                <div class="text-center">
+                    <span id="fullscreenDigits" class="font-mono text-3xl sm:text-4xl font-black text-slate-100 tracking-widest block">25:00</span>
+                    <span id="fullscreenPercentage" class="text-[8px] font-black text-slate-500 block">100% REMAINING</span>
+                </div>
+            </div>
+            <p id="fullscreenInspiringMessage" class="text-slate-400 text-[10px] text-center max-w-sm leading-relaxed">
+                スマートフォンを置いて、自分だけの特別な学習時間に集中しましょう。
+            </p>
+        </div>
+
+        <div class="flex items-center justify-center gap-4">
+            <button onclick="resetFullscreenTimer()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-full border border-slate-800"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>
+            <button onclick="toggleFullscreenTimer()" id="fullscreenPlayBtn" class="p-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg"><i data-lucide="pause" class="w-5 h-5" id="fullscreenPlayIcon"></i></button>
+            <button onclick="forceCompleteTimerConfirm()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-full border border-slate-800"><i data-lucide="check" class="w-4 h-4"></i></button>
+        </div>
+    </div>
+
+    <!-- 新規教科追加モーダル -->
+    <div id="addSubjectModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center hidden z-[110] p-4">
+        <div class="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
+            <div class="flex items-center gap-2 text-indigo-600">
+                <div class="p-1.5 bg-indigo-50 rounded-lg">
+                    <i data-lucide="bookmark-plus" class="w-5 h-5"></i>
+                </div>
+                <h4 class="text-xs font-black text-slate-800">新規教科を追加</h4>
+            </div>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 mb-1">教科 / カテゴリ名</label>
+                    <input type="text" id="modalSubjectNameInput" placeholder="例: 日本史B、基本情報、英会話" class="w-full bg-slate-50 border rounded-lg p-2.5 text-xs font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 mb-1">テーマカラー</label>
+                    <div id="modalColorPalette" class="grid grid-cols-6 gap-1.5 p-1.5 bg-slate-50 border rounded-lg"></div>
+                </div>
+                <p id="modalErrorMessage" class="text-[9px] text-rose-500 font-bold hidden"></p>
+            </div>
+
+            <div class="flex justify-end gap-1.5 pt-1">
+                <button onclick="closeAddSubjectModal()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-600">キャンセル</button>
+                <button onclick="submitAddSubjectFromModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-[10px] font-bold text-white">登録</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- グローバルカラーピッカー -->
+    <div id="globalColorPicker" class="fixed hidden bg-white border rounded-xl shadow-xl p-2 gap-1 z-[120] flex flex-wrap max-w-[200px]"></div>
+
+    <!-- 確認モーダル -->
+    <div id="customConfirmModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center hidden z-[100] p-4">
+        <div class="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-100 space-y-3">
+            <div class="flex items-center gap-2 text-indigo-600" id="confirmModalHeader">
+                <div class="p-1.5 bg-indigo-50 rounded-lg" id="confirmModalIconBox">
+                    <i data-lucide="help-circle" class="w-5 h-5" id="confirmModalIcon"></i>
+                </div>
+                <h4 class="text-xs font-black text-slate-800" id="confirmModalTitle">確認</h4>
+            </div>
+            <p id="confirmModalMessage" class="text-[11px] text-slate-600 leading-relaxed font-medium"></p>
+            <div class="flex justify-end gap-1.5 pt-1">
+                <button id="confirmCancelBtn" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-600">キャンセル</button>
+                <button id="confirmOkBtn" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-[10px] font-bold text-white">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知 -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 border border-slate-700 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none z-50 font-bold">
+        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+        <span id="toastMessage" class="text-[11px]">保存しました</span>
+    </div>
+
+    <!-- フッター -->
+    <footer class="bg-slate-100 border-t border-slate-200 text-center py-3 text-[10px] text-slate-400 mt-auto">
+        <div class="max-w-full mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-1.5">
+            <p>&copy; 2026 学習手帳バーチカル. All Rights Reserved.</p>
+            <button onclick="resetAllDataWithConfirm()" class="text-rose-500 hover:text-rose-600 font-bold">手帳データを全初期化</button>
+        </div>
+    </footer>
+
+    <script>
+        // --- なぞり塗り（ドラッグペイント）用のグローバル管理 ---
+        let isPainting = false;
+
+        // --- 安全なストレージラッパー ---
+        const safeStorage = {
+            getItem(key) {
+                try { return localStorage.getItem(key); } catch (e) { return null; }
+            },
+            setItem(key, value) {
+                try { localStorage.setItem(key, value); } catch (e) {}
+            },
+            clear() {
+                try { localStorage.clear(); } catch (e) {}
+            }
+        };
+
+        // --- トースト通知 ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMessage');
+            if (toast && msgEl) {
+                msgEl.innerText = msg;
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 2000);
+            }
+        }
+
+        // --- グローバルステート ---
+        const todayDateObj = new Date();
+        let currentYear = todayDateObj.getFullYear();
+        let currentMonth = todayDateObj.getMonth() + 1; 
+        let currentSelectedDay = todayDateObj.getDate(); 
+        
+        let trendViewMode = 'week'; 
+        let subjects = ["国語", "数学", "英語", "社会", "理科"];
+        let selectedBrush = null; 
+        let currentWeekKey = "";
+
+        // 時間表示範囲 (5:00から24:00までの19時間 = 38枠)
+        const START_HOUR = 5;
+        const END_HOUR = 24; 
+        const TOTAL_SLOTS = (END_HOUR - START_HOUR) * 2; // 38枠
+
+        let appData = {
+            monthlyProgress: {},
+            dailyTimelines: {}, 
+            subjectColors: {},
+            timerSlotsFocus: [], 
+            timerSlotsBreak: [], 
+            pomodoroAutoLoop: false,
+            weeklyGoals: {},
+            weeklyReviews: {},
+            dailyGoals: {}
+        };
+
+        let timerSecondsTotal = 25 * 60; 
+        let timerSecondsLeft = 25 * 60;
+        let timerStateMode = 'focus'; 
+        let timerSubjectSelected = "国語";
+        let timerIntervalId = null;
+        let timerIsRunning = false;
+        let timerIsOvertime = false;
+        let timerOvertimeSeconds = 0;
+        let alarmIntervalId = null;
+        let audioCtx = null;
+        let editingTimerSlotIndex = null; 
+        let modalSelectedColor = 'indigo';
+
+        const colorPalette = {
+            indigo: { bg: 'bg-indigo-500', text: 'text-indigo-600', dot: '#6366f1', light: 'bg-indigo-50', border: 'border-indigo-200' },
+            emerald: { bg: 'bg-emerald-500', text: 'text-emerald-600', dot: '#10b981', light: 'bg-emerald-50', border: 'border-emerald-200' },
+            amber: { bg: 'bg-amber-500', text: 'text-amber-600', dot: '#f59e0b', light: 'bg-amber-50', border: 'border-amber-200' },
+            rose: { bg: 'bg-rose-500', text: 'text-rose-600', dot: '#f43f5e', light: 'bg-rose-50', border: 'border-rose-200' },
+            violet: { bg: 'bg-violet-500', text: 'text-violet-600', dot: '#8b5cf6', light: 'bg-violet-50', border: 'border-violet-200' },
+            sky: { bg: 'bg-sky-500', text: 'text-sky-600', dot: '#0ea5e9', light: 'bg-sky-50', border: 'border-sky-200' },
+            orange: { bg: 'bg-orange-500', text: 'text-orange-600', dot: '#f97316', light: 'bg-orange-50', border: 'border-orange-200' },
+            teal: { bg: 'bg-teal-500', text: 'text-teal-600', dot: '#14b8a6', light: 'bg-teal-50', border: 'border-teal-200' },
+            fuchsia: { bg: 'bg-fuchsia-500', text: 'text-fuchsia-600', dot: '#d946ef', light: 'bg-fuchsia-50', border: 'border-fuchsia-200' },
+            lime: { bg: 'bg-lime-500', text: 'text-lime-600', dot: '#84cc16', light: 'bg-lime-50', border: 'border-lime-200' },
+            cyan: { bg: 'bg-cyan-500', text: 'text-cyan-600', dot: '#06b6d4', light: 'bg-cyan-50', border: 'border-cyan-200' },
+            pink: { bg: 'bg-pink-500', text: 'text-pink-600', dot: '#ec4899', light: 'bg-pink-50', border: 'border-pink-200' }
+        };
+
+        const tipsList = [
+            "iPadなどのタブレットでは、マスの上をなぞる（タッチドラッグする）だけで、ルーズリーフ手帳にマーカーを引くように一気に学習を記録できます！",
+            "マスの消去は、ブラシ一覧の「消しゴム」ツールを選んでから対象のマスをなぞるだけです。",
+            "タイマーが終了すると超過時間を自動計測！「完了して記録」を押すまでアラームと計測が続きます。",
+            "集中と休憩の自動ループをONにすると、次のポモドーロセッションがハンズフリーで自動スタートします！"
+        ];
+
+        let pieChartInstance = null;
+        let trendChartInstance = null;
+
+        // --- グローバルイベント設定 (ドラッグペイントの終了検知) ---
+        window.addEventListener('pointerup', () => {
+            if (isPainting) {
+                isPainting = false;
+                saveAllData(true);
+                updateDashboardStats();
+                updateCharts();
+                renderWeeklyView();
+                renderDailyView();
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+            initApp();
+            
+            // ポップアップなどの外側クリック処理
+            document.addEventListener('pointerdown', (e) => {
+                if (!e.target) return;
+                const picker = document.getElementById('globalColorPicker');
+                if (picker && !picker.contains(e.target) && (!e.target.classList || !e.target.classList.contains('subject-color-dot'))) {
+                    picker.classList.add('hidden');
+                }
+                const monthPanel = document.getElementById('globalMonthPickerPanel');
+                const monthBtn = document.getElementById('currentMonthLabelBtn');
+                if (monthPanel && !monthPanel.contains(e.target) && monthBtn && !monthBtn.contains(e.target)) {
+                    monthPanel.classList.add('hidden');
+                }
+                const calPanel = document.getElementById('dailyCalendarDropdown');
+                const calBtn = document.getElementById('dailyCalendarBtn');
+                if (calPanel && !calPanel.contains(e.target) && calBtn && !calBtn.contains(e.target)) {
+                    calPanel.classList.add('hidden');
+                }
+            });
+        });
+
+        function safeCreateIcons() {
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                try { lucide.createIcons(); } catch (err) {}
+            }
+        }
+
+        // --- カスタムモーダル ---
+        function openCustomConfirm({ title, message, onConfirm, icon = 'help-circle', colorClass = 'indigo', okText = '確認', cancelText = 'キャンセル' }) {
+            const modal = document.getElementById('customConfirmModal');
+            const titleEl = document.getElementById('confirmModalTitle');
+            const msgEl = document.getElementById('confirmModalMessage');
+            const okBtn = document.getElementById('confirmOkBtn');
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+            const iconBox = document.getElementById('confirmModalIconBox');
+            const header = document.getElementById('confirmModalHeader');
+
+            if (!modal || !titleEl || !msgEl || !okBtn || !cancelBtn) return;
+
+            titleEl.innerText = title;
+            msgEl.innerText = message;
+            okBtn.innerText = okText;
+            cancelBtn.innerText = cancelText;
+
+            header.className = `flex items-center gap-2 text-${colorClass}-600`;
+            iconBox.className = `p-1.5 bg-${colorClass}-50 rounded-lg`;
+            
+            const iconEl = document.getElementById('confirmModalIcon');
+            if (iconEl) iconEl.setAttribute('data-lucide', icon);
+            safeCreateIcons();
+
+            okBtn.className = `px-3 py-1.5 bg-${colorClass}-600 hover:bg-${colorClass}-700 rounded-lg text-[10px] font-bold text-white transition-colors`;
+            modal.classList.remove('hidden');
+
+            okBtn.onclick = () => {
+                modal.classList.add('hidden');
+                if (onConfirm) onConfirm();
+            };
+            cancelBtn.onclick = () => modal.classList.add('hidden');
+        }
+
+        // --- 週計算 (月曜始まり) ---
+        function getWeekRange(date) {
+            const d = new Date(date);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            const monday = new Date(d.setDate(diff));
+            
+            const weekDays = [];
+            for (let i = 0; i < 7; i++) {
+                const nextDay = new Date(monday);
+                nextDay.setDate(monday.getDate() + i);
+                weekDays.push(nextDay);
+            }
+            return weekDays;
+        }
+
+        function getWeekKey(mondayDate) {
+            return `${mondayDate.getFullYear()}-${mondayDate.getMonth() + 1}-${mondayDate.getDate()}`;
+        }
+
+        // --- 新規教科追加ポップアップ ---
+        function openAddSubjectModal() {
+            const modal = document.getElementById('addSubjectModal');
+            const input = document.getElementById('modalSubjectNameInput');
+            const errorMsg = document.getElementById('modalErrorMessage');
+            input.value = '';
+            errorMsg.classList.add('hidden');
+            modalSelectedColor = 'indigo'; 
+            renderModalColorPalette();
+            modal.classList.remove('hidden');
+            input.focus();
+        }
+
+        function closeAddSubjectModal() {
+            document.getElementById('addSubjectModal').classList.add('hidden');
+        }
+
+        function renderModalColorPalette() {
+            const container = document.getElementById('modalColorPalette');
+            if (!container) return;
+            container.innerHTML = '';
+
+            Object.keys(colorPalette).forEach(colorKey => {
+                const colorConfig = colorPalette[colorKey];
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `w-8 h-8 rounded-lg ${colorConfig.bg} transition-all relative flex items-center justify-center hover:scale-105 active:scale-95 shadow-sm`;
+                if (modalSelectedColor === colorKey) {
+                    btn.classList.add('ring-2', 'ring-slate-800', 'ring-offset-1');
+                    btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-white"></i>`;
+                }
+                btn.onclick = () => {
+                    modalSelectedColor = colorKey;
+                    renderModalColorPalette();
+                };
+                container.appendChild(btn);
+            });
+            safeCreateIcons();
+        }
+
+        function submitAddSubjectFromModal() {
+            const input = document.getElementById('modalSubjectNameInput');
+            const errorMsg = document.getElementById('modalErrorMessage');
+            const val = input.value.trim();
+
+            if (!val) {
+                errorMsg.innerText = "教科名を入力してください。";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            if (subjects.includes(val)) {
+                errorMsg.innerText = "すでに同じ名前の教科が存在します。";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            subjects.push(val);
+            appData.subjectColors[val] = modalSelectedColor;
+            selectedBrush = val; 
+
+            closeAddSubjectModal();
+            initApp();
+            saveAllData(); 
+            showToast(`🎨 教科「${val}」を新しく登録しました！`);
+        }
+
+        function toggleAutoLoopSetting(checked) {
+            appData.pomodoroAutoLoop = checked;
+            saveAllData();
+            showToast(checked ? "🔄 ポモドーロの自動ループを有効にしました" : "⏸️ 自動ループを無効にしました");
+        }
+
+        function setPomodoroTechnique() {
+            timerStateMode = 'focus';
+            appData.pomodoroAutoLoop = true;
+            const autoLoopToggle = document.getElementById('pomodoroAutoLoopToggle');
+            if (autoLoopToggle) autoLoopToggle.checked = true;
+            timerIsOvertime = false;
+            timerOvertimeSeconds = 0;
+            timerSecondsTotal = 25 * 60;
+            timerSecondsLeft = timerSecondsTotal;
+            saveAllData();
+            initApp();
+            showToast("⏱️ ポモドーロ手帳サイクル（25分集中＋自動休憩）をセットしました！");
+        }
+
+        function initApp() {
+            if (!selectedBrush || (selectedBrush !== 'eraser' && !subjects.includes(selectedBrush))) {
+                selectedBrush = subjects.length > 0 ? subjects[0] : 'eraser';
+            }
+            updateGlobalMonthUI();
+            renderMonthPickerGrid();
+            renderDashboardSubjects();
+            renderMonthlyTable();
+            renderDailyView();
+            renderWeeklyView(); 
+            renderTimerPresets();
+            renderTimerClassifications();
+            updateTimerDisplay();
+            initCharts();
+            generateNewTip();
+            safeCreateIcons();
+        }
+
+        function loadFromLocalStorage() {
+            const savedSubjects = safeStorage.getItem('study_planner_subjects');
+            if (savedSubjects) {
+                try {
+                    const parsed = JSON.parse(savedSubjects);
+                    if (Array.isArray(parsed)) subjects = parsed;
+                } catch(e) {}
+            }
+            const savedData = safeStorage.getItem('study_planner_appdata');
+            if (savedData) {
+                try { appData = JSON.parse(savedData); } catch(e) {}
+            }
+            if (!appData) appData = {};
+            if (!appData.monthlyProgress) appData.monthlyProgress = {};
+            if (!appData.dailyTimelines) appData.dailyTimelines = {};
+            if (!appData.subjectColors) appData.subjectColors = {};
+            if (!appData.weeklyGoals) appData.weeklyGoals = {};
+            if (!appData.weeklyReviews) appData.weeklyReviews = {};
+            if (!appData.weeklyToDos) appData.weeklyToDos = {};
+            if (!appData.dailyGoals) appData.dailyGoals = {};
+
+            if (!appData.timerSlotsFocus || appData.timerSlotsFocus.length !== 5) {
+                appData.timerSlotsFocus = [
+                    { label: '勉強集中ポモドーロ', mins: 25 },
+                    { label: 'サクッと英単語', mins: 10 },
+                    { label: 'じっくり数学問題', mins: 50 },
+                    { label: '読書・インプット', mins: 20 },
+                    { label: 'テスト対策集中', mins: 45 }
+                ];
+            }
+            if (!appData.timerSlotsBreak || appData.timerSlotsBreak.length !== 5) {
+                appData.timerSlotsBreak = [
+                    { label: 'リフレッシュ休憩', mins: 5 },
+                    { label: '長めの仮眠休憩', mins: 15 },
+                    { label: '水分・お茶補給', mins: 8 },
+                    { label: 'ストレッチ体操', mins: 10 },
+                    { label: 'リラックス瞑想', mins: 12 }
+                ];
+            }
+
+            if (appData.pomodoroAutoLoop === undefined) appData.pomodoroAutoLoop = false;
+            const autoLoopToggle = document.getElementById('pomodoroAutoLoopToggle');
+            if (autoLoopToggle) autoLoopToggle.checked = appData.pomodoroAutoLoop;
+
+            migrateDataToConsolidated();
+
+            subjects.forEach((sub, i) => {
+                if (!appData.subjectColors[sub]) {
+                    const keys = Object.keys(colorPalette);
+                    appData.subjectColors[sub] = keys[i % keys.length];
+                }
+            });
+        }
+
+        function migrateDataToConsolidated() {
+            if (!appData.dailyTimelines) {
+                appData.dailyTimelines = {};
+                return;
+            }
+            // 24時間フルレンジ(48スロット)対応
+            for (let dayKey in appData.dailyTimelines) {
+                const dayData = appData.dailyTimelines[dayKey];
+                if (dayData && !dayData.plans && !dayData.actuals) {
+                    const plans = Array(48).fill(null);
+                    const actuals = Array(48).fill(null);
+                    for (let key in dayData) {
+                        if (Array.isArray(dayData[key])) {
+                            dayData[key].forEach((val, idx) => {
+                                if (val === 1 || val === 3) plans[idx] = key;
+                                if (val === 2 || val === 3) actuals[idx] = key;
+                            });
+                        }
+                    }
+                    appData.dailyTimelines[dayKey] = { plans, actuals };
+                }
+            }
+        }
+
+        function getOrInitDayTimeline(dayKey) {
+            if (!appData.dailyTimelines[dayKey]) {
+                appData.dailyTimelines[dayKey] = {
+                    plans: Array(48).fill(null),
+                    actuals: Array(48).fill(null)
+                };
+            }
+            if (!appData.dailyTimelines[dayKey].plans) appData.dailyTimelines[dayKey].plans = Array(48).fill(null);
+            if (!appData.dailyTimelines[dayKey].actuals) appData.dailyTimelines[dayKey].actuals = Array(48).fill(null);
+            return appData.dailyTimelines[dayKey];
+        }
+
+        function saveAllData(silent = false) {
+            safeStorage.setItem('study_planner_subjects', JSON.stringify(subjects));
+            safeStorage.setItem('study_planner_appdata', JSON.stringify(appData));
+            if (!silent) {
+                showToast("💾 リアルタイム自動保存しました。");
+            }
+        }
+
+        function resetAllDataWithConfirm() {
+            openCustomConfirm({
+                title: '手帳データの初期化',
+                message: 'すべての学習記録、計画、教科などを完全にリセットしてよろしいですか？',
+                icon: 'trash-2',
+                colorClass: 'rose',
+                okText: '完全に初期化する',
+                onConfirm: () => {
+                    safeStorage.clear();
+                    subjects = ["国語", "数学", "英語", "社会", "理科"];
+                    appData = { monthlyProgress: {}, dailyTimelines: {}, subjectColors: {} };
+                    selectedBrush = "国語";
+                    initApp();
+                    showToast("🔄 初期化しました。新しい手帳をはじめましょう！");
+                }
+            });
+        }
+
+        // --- タブ制御 ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-indigo-600', 'text-indigo-600');
+                btn.classList.add('border-transparent', 'text-slate-500');
+            });
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('border-transparent', 'text-slate-500');
+                activeBtn.classList.add('border-indigo-600', 'text-indigo-600');
+            }
+
+            if (tabId === 'dashboard') {
+                updateDashboardStats();
+                updateCharts();
+            } else if (tabId === 'weekly') {
+                renderWeeklyView();
+            } else if (tabId === 'daily') {
+                renderDailyView();
+            } else if (tabId === 'monthly') {
+                renderMonthlyTable();
+            }
+            safeCreateIcons();
+        }
+
+        function updateGlobalMonthUI() {
+            document.getElementById('currentMonthLabel').innerText = `${currentYear}年${currentMonth}月`;
+            document.getElementById('monthlyTitle').innerText = `${currentMonth}月の学習進捗表`;
+            document.getElementById('pickerYearSelect').value = currentYear;
+        }
+
+        function navigateCalendarMonth(dir, e) {
+            e.stopPropagation();
+            currentMonth += dir;
+            if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+            if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+            currentSelectedDay = 1;
+            updateGlobalMonthUI();
+            renderDailyCalendarDropdownGrid();
+            renderDailyView();
+        }
+
+        function jumpToTodayInCalendar(e) {
+            e.stopPropagation();
+            const now = new Date();
+            currentYear = now.getFullYear();
+            currentMonth = now.getMonth() + 1;
+            currentSelectedDay = now.getDate();
+            updateGlobalMonthUI();
+            document.getElementById('dailyCalendarDropdown').classList.add('hidden');
+            renderDailyView();
+        }
+
+        function getDaysInMonth(year, month) {
+            return new Date(year, month, 0).getDate();
+        }
+
+        function changeMonth(dir) {
+            currentMonth += dir;
+            if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+            if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+            updateGlobalMonthUI();
+            initApp();
+        }
+
+        function toggleGlobalMonthPicker(e) {
+            e.stopPropagation();
+            document.getElementById('globalMonthPickerPanel').classList.toggle('hidden');
+        }
+
+        function renderMonthPickerGrid() {
+            const grid = document.getElementById('monthPickerGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            for (let m = 1; m <= 12; m++) {
+                const btn = document.createElement('button');
+                btn.className = "p-1.5 text-xs font-bold rounded-lg border hover:bg-indigo-50 hover:text-indigo-600 transition-all bg-slate-50 text-slate-700";
+                btn.innerText = `${m}月`;
+                if (m === currentMonth) {
+                    btn.classList.add('bg-indigo-600', 'text-white', 'hover:bg-indigo-700');
+                }
+                btn.onclick = () => {
+                    currentYear = parseInt(document.getElementById('pickerYearSelect').value);
+                    currentMonth = m;
+                    document.getElementById('globalMonthPickerPanel').classList.add('hidden');
+                    updateGlobalMonthUI();
+                    initApp();
+                };
+                grid.appendChild(btn);
+            }
+        }
+
+        function showColorPicker(e, subName) {
+            e.stopPropagation();
+            const picker = document.getElementById('globalColorPicker');
+            picker.innerHTML = '';
+            Object.keys(colorPalette).forEach(cName => {
+                const dot = document.createElement('button');
+                dot.className = `w-6 h-6 rounded-full ${colorPalette[cName].bg} border-2 ${appData.subjectColors[subName] === cName ? 'border-slate-900' : 'border-white'} hover:scale-110 transition-transform`;
+                dot.onclick = () => {
+                    appData.subjectColors[subName] = cName;
+                    picker.classList.add('hidden');
+                    initApp();
+                    saveAllData(true); 
+                };
+                picker.appendChild(dot);
+            });
+            picker.classList.remove('hidden');
+            const rect = e.target.getBoundingClientRect();
+            picker.style.top = `${rect.bottom + window.scrollY + 4}px`;
+            picker.style.left = `${rect.left + window.scrollX}px`;
+        }
+
+        function generateNewTip() {
+            const idx = Math.floor(Math.random() * tipsList.length);
+            document.getElementById('dashboardTips').innerText = tipsList[idx];
+        }
+
+        function renderDashboardSubjects() {
+            const container = document.getElementById('dashboardSubjectsList');
+            if (!container) return;
+            container.innerHTML = '';
+            subjects.forEach(sub => {
+                const c = colorPalette[appData.subjectColors[sub] || 'indigo'];
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-lg";
+                div.innerHTML = `
+                    <div class="flex items-center gap-1.5 min-w-0">
+                        <button onclick="showColorPicker(event, '${sub}')" class="w-3.5 h-3.5 rounded-full ${c.bg} subject-color-dot shrink-0" title="色を変更"></button>
+                        <span class="font-bold text-[11px] text-slate-700 truncate">${sub}</span>
+                    </div>
+                    <button onclick="openDeleteModal('${sub}')" class="p-1 text-slate-300 hover:text-rose-600 rounded transition">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+            safeCreateIcons();
+        }
+
+        function openDeleteModal(subName) {
+            openCustomConfirm({
+                title: '教科の削除',
+                message: `本当に「${subName}」を削除しますか？これまでの進捗内容などの関連データは非表示になります。`,
+                icon: 'alert-triangle',
+                colorClass: 'rose',
+                okText: '削除する',
+                onConfirm: () => {
+                    subjects = subjects.filter(s => s !== subName);
+                    if (selectedBrush === subName) selectedBrush = subjects[0] || 'eraser';
+                    initApp();
+                    saveAllData();
+                }
+            });
+        }
+
+        function updateDashboardStats() {
+            const daysCount = getDaysInMonth(currentYear, currentMonth);
+            let totalMins = 0;
+            let activeDaysSet = new Set();
+
+            for (let d = 1; d <= daysCount; d++) {
+                const dayKey = `${currentYear}-${currentMonth}-${d}`;
+                const dayData = appData.dailyTimelines[dayKey];
+                if (dayData && dayData.actuals) {
+                    dayData.actuals.forEach(val => { if (val !== null) totalMins += 30; });
+                }
+                if (appData.monthlyProgress[dayKey]) {
+                    let hasContent = Object.values(appData.monthlyProgress[dayKey]).some(v => v && v.toString().trim() !== '' && !v.toString().includes('_checked'));
+                    if (hasContent) activeDaysSet.add(d);
+                }
+            }
+
+            document.getElementById('stat-total-time').innerText = `${(totalMins / 60).toFixed(1)}時間`;
+            document.getElementById('stat-active-days').innerText = `${activeDaysSet.size}日`;
+            document.getElementById('stat-subjects-count').innerText = `${subjects.length}教科`;
+
+            // 今日の達成率
+            const todayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            const todayData = getOrInitDayTimeline(todayKey);
+            let plannedMins = 0;
+            let actualMins = 0;
+            todayData.plans.forEach(val => { if (val !== null) plannedMins += 30; });
+            todayData.actuals.forEach(val => { if (val !== null) actualMins += 30; });
+
+            let rate = plannedMins > 0 ? Math.round((actualMins / plannedMins) * 100) : 0;
+            if (rate > 100) rate = 100;
+            document.getElementById('stat-today-completion').innerText = `${rate}%`;
+        }
+
+        // --- 月間進捗表 ---
+        function renderMonthlyTable() {
+            const container = document.getElementById('customHeadersContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            subjects.forEach(sub => {
+                const th = document.createElement('th');
+                th.className = "py-2 px-1 text-slate-600 font-bold border-r border-slate-200 min-w-[100px] relative group";
+                th.innerHTML = `
+                    <span>${sub}</span>
+                    <button onclick="openDeleteModal('${sub}')" class="absolute right-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-0.5 hover:bg-slate-200 text-slate-400 hover:text-rose-600 rounded transition">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                `;
+                container.appendChild(th);
+            });
+
+            const tbody = document.getElementById('monthlyTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            const totalDays = getDaysInMonth(currentYear, currentMonth);
+
+            for (let d = 1; d <= totalDays; d++) {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                
+                let dayLabelClass = "font-bold text-xs";
+                const dateObj = new Date(currentYear, currentMonth - 1, d);
+                const wDay = dateObj.getDay();
+                if (wDay === 0) dayLabelClass += " text-rose-500 bg-rose-50/20";
+                if (wDay === 6) dayLabelClass += " text-sky-500 bg-sky-50/20";
+
+                const dayKey = `${currentYear}-${currentMonth}-${d}`;
+                if (!appData.monthlyProgress[dayKey]) appData.monthlyProgress[dayKey] = {};
+
+                let subCellsHtml = '';
+                subjects.forEach(sub => {
+                    const currentVal = appData.monthlyProgress[dayKey][sub] || '';
+                    subCellsHtml += `
+                        <td class="p-0.5 border-r border-slate-200">
+                            <input type="text" value="${escapeHtml(currentVal)}" 
+                                onchange="updateMonthlyCell(${d}, '${escapeJsString(sub)}', this.value)"
+                                placeholder="..." 
+                                class="w-full bg-transparent px-1 py-0.5 text-center focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none rounded">
+                        </td>
+                    `;
+                });
+
+                const memoVal = appData.monthlyProgress[dayKey]['__reflection'] || '';
+
+                tr.innerHTML = `
+                    <td class="py-1 px-1 border-r border-slate-200 ${dayLabelClass}">
+                        <button onclick="jumpToDailyDay(${d})" class="hover:underline text-left block w-full">
+                            ${d}日(${['日','月','火','水','木','金','土'][wDay]})
+                        </button>
+                    </td>
+                    ${subCellsHtml}
+                    <td class="p-0.5">
+                        <input type="text" value="${escapeHtml(memoVal)}" 
+                            onchange="updateMonthlyCell(${d}, '__reflection', this.value)"
+                            placeholder="振り返り..." 
+                            class="w-full bg-transparent px-2 py-0.5 text-left focus:bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none rounded text-slate-500 text-[11px]">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+            safeCreateIcons();
+        }
+
+        function updateMonthlyCell(day, key, value) {
+            const dayKey = `${currentYear}-${currentMonth}-${day}`;
+            if (!appData.monthlyProgress[dayKey]) appData.monthlyProgress[dayKey] = {};
+            appData.monthlyProgress[dayKey][key] = value;
+            if (day === currentSelectedDay) {
+                renderDailySubjectsList();
+            }
+            saveAllData(true); 
+        }
+
+        // --- カレンダーコントロール (Daily) ---
+        function renderDailyCalendarDropdownGrid() {
+            document.getElementById('calendarDropdownMonthLabel').innerText = `${currentYear}年${currentMonth}月`;
+            const container = document.getElementById('calendarGridContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const firstDayIndex = new Date(currentYear, currentMonth - 1, 1).getDay();
+            const totalDays = getDaysInMonth(currentYear, currentMonth);
+
+            for (let i = 0; i < firstDayIndex; i++) {
+                container.appendChild(document.createElement('div'));
+            }
+
+            const today = new Date();
+            const isTodayInView = (today.getFullYear() === currentYear && (today.getMonth() + 1) === currentMonth);
+            document.getElementById('calendarTodayIndicator').innerText = isTodayInView ? `今日: ${today.getDate()}日` : "今月以外";
+
+            for (let d = 1; d <= totalDays; d++) {
+                const btn = document.createElement('button');
+                btn.innerText = d;
+                btn.className = "p-1.5 text-xs font-bold rounded-lg hover:bg-indigo-50 text-slate-700 transition-all";
+                if (d === currentSelectedDay) {
+                    btn.className += " bg-indigo-600 text-white hover:bg-indigo-700 shadow";
+                } else if (isTodayInView && d === today.getDate()) {
+                    btn.className += " border border-emerald-500 text-emerald-600";
+                }
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    currentSelectedDay = d;
+                    document.getElementById('dailyCalendarDropdown').classList.add('hidden');
+                    renderDailyView();
+                };
+                container.appendChild(btn);
+            }
+        }
+
+        function setEvaluationUI(val) {
+            document.querySelectorAll('.eval-btn').forEach(b => b.className = "eval-btn flex flex-col items-center p-1.5 rounded-lg border w-12 hover:scale-105 transition-all bg-white text-xs");
+            if (val > 0) {
+                const target = document.getElementById(`evalBtn${val}`);
+                if (target) target.className += " ring-2 ring-indigo-500 bg-indigo-50/30 border-indigo-300";
+            }
+        }
+
+        function renderDailyView() {
+            const labelDay = document.getElementById('selectedDayLabel');
+            if (labelDay) labelDay.innerText = `${currentSelectedDay}日`;
+
+            const labelLogDate = document.getElementById('dailyLogDateLabel');
+            if (labelLogDate) labelLogDate.innerText = `${currentSelectedDay}日`;
+            
+            const dObj = new Date(currentYear, currentMonth - 1, currentSelectedDay);
+            const wDayStr = ['日','月','火','水','木','金','土'][dObj.getDay()];
+            
+            const labelWeek = document.getElementById('dailyLogWeekDayLabel');
+            if (labelWeek) labelWeek.innerText = `(${wDayStr})`;
+
+            const dayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            getOrInitDayTimeline(dayKey);
+            
+            const progressObj = appData.monthlyProgress[dayKey] || {};
+            const reflTextarea = document.getElementById('dailyReflection');
+            if (reflTextarea) reflTextarea.value = progressObj['__reflection'] || '';
+
+            const currentEval = progressObj['__evaluation'] || 0;
+            setEvaluationUI(currentEval);
+
+            renderDailyTimelineGrid();
+            renderDailySubjectsList();
+            calculateDailySummary();
+        }
+
+        function jumpToDailyDay(d) {
+            currentSelectedDay = d;
+            switchTab('daily');
+        }
+
+        function navigateDailyDay(dir) {
+            const totalDays = getDaysInMonth(currentYear, currentMonth);
+            currentSelectedDay += dir;
+            if (currentSelectedDay > totalDays) {
+                currentSelectedDay = 1;
+                changeMonth(1);
+                return;
+            }
+            if (currentSelectedDay < 1) {
+                changeMonth(-1);
+                currentSelectedDay = getDaysInMonth(currentYear, currentMonth);
+                return;
+            }
+            renderDailyView();
+        }
+
+        function toggleDailyCalendarPopup(e) {
+            e.stopPropagation();
+            document.getElementById('dailyCalendarDropdown').classList.toggle('hidden');
+            renderDailyCalendarDropdownGrid();
+        }
+
+        // --- パレットブラシ共通 ---
+        function renderBrushPalette() {
+            const containers = [
+                document.getElementById('brushPaletteContainer'),
+                document.getElementById('weeklyBrushPaletteContainer')
+            ];
+
+            containers.forEach(container => {
+                if (!container) return;
+                container.innerHTML = '';
+                
+                subjects.forEach(sub => {
+                    const c = colorPalette[appData.subjectColors[sub] || 'indigo'];
+                    const isSelected = (selectedBrush === sub);
+                    const btn = document.createElement('button');
+                    btn.className = `px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all shadow-sm border ${
+                        isSelected 
+                        ? `ring-2 ring-slate-800 scale-105 border-slate-900 text-white ${c.bg}` 
+                        : `bg-white hover:bg-slate-50 border-slate-200 text-slate-700`
+                    }`;
+                    btn.innerHTML = `
+                        <span class="w-2 h-2 rounded-full ${isSelected ? 'bg-white' : c.bg}"></span>
+                        <span>${sub}</span>
+                    `;
+                    btn.onclick = () => {
+                        selectedBrush = sub;
+                        renderBrushPalette();
+                        renderDailyView();
+                        renderWeeklyView();
+                    };
+                    container.appendChild(btn);
+                });
+
+                // 消しゴム
+                const isEraser = (selectedBrush === 'eraser');
+                const eraserBtn = document.createElement('button');
+                eraserBtn.className = `px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all shadow-sm border ${
+                    isEraser 
+                    ? 'ring-2 ring-slate-600 scale-105 border-slate-900 bg-slate-700 text-white' 
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                }`;
+                eraserBtn.innerHTML = `<i data-lucide="eraser" class="w-3.5 h-3.5"></i><span>消しゴム</span>`;
+                eraserBtn.onclick = () => {
+                    selectedBrush = 'eraser';
+                    renderBrushPalette();
+                    renderDailyView();
+                    renderWeeklyView();
+                };
+                container.appendChild(eraserBtn);
+            });
+            safeCreateIcons();
+        }
+
+        // --- ドラッグペイントの中核処理 (共通) ---
+        function paintTimelineCell(dayKey, slotIdx, type, isStart = false) {
+            if (isStart) isPainting = true;
+            if (!isPainting) return;
+
+            const dayData = getOrInitDayTimeline(dayKey);
+            const brushVal = (selectedBrush === 'eraser') ? null : selectedBrush;
+
+            if (type === 'plan') {
+                dayData.plans[slotIdx] = brushVal;
+            } else {
+                dayData.actuals[slotIdx] = brushVal;
+            }
+
+            // 即時UI更新（高速化のためDOMのクラス書き換え）
+            const cellId = `${type}-${dayKey}-${slotIdx}`;
+            const cellEl = document.getElementById(cellId);
+            if (cellEl) {
+                cellEl.className = "w-full h-full text-[8px] font-bold text-center truncate pointer-events-none select-none transition-all flex items-center justify-center ";
+                if (brushVal) {
+                    const c = colorPalette[appData.subjectColors[brushVal] || 'indigo'];
+                    cellEl.className += ` ${c.bg} text-white shadow-sm`;
+                    cellEl.innerText = brushVal;
+                } else {
+                    cellEl.className += " bg-transparent text-transparent";
+                    cellEl.innerText = "";
+                }
+            }
+        }
+
+        // --- 1日スケジュール (Daily 2列バーチカル) の描画 ---
+        function renderDailyTimelineGrid() {
+            const container = document.getElementById('dailyTimelinesContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const dayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            const dayData = getOrInitDayTimeline(dayKey);
+
+            // START_HOUR (5:00) から END_HOUR (24:00) までの19時間×2 = 38枠
+            for (let i = 0; i < TOTAL_SLOTS; i++) {
+                const globalSlotIdx = i + (START_HOUR * 2); 
+                const hr = Math.floor(globalSlotIdx / 2);
+                const min = globalSlotIdx % 2 === 0 ? "00" : "30";
+                const timeString = `${hr.toString().padStart(2, '0')}:${min}`;
+
+                const row = document.createElement('div');
+                row.className = "grid grid-cols-12 border-b border-slate-100 items-center h-7 select-none";
+
+                // 時間軸
+                const timeCol = document.createElement('div');
+                timeCol.className = "col-span-3 text-center h-full flex items-center justify-center font-mono text-[9px] font-bold text-slate-400 bg-slate-50/50 border-r";
+                timeCol.innerText = timeString;
+                row.appendChild(timeCol);
+
+                // 予定 (Plan)
+                const planCol = document.createElement('div');
+                planCol.className = "col-span-4 h-full border-r relative cursor-crosshair paint-cell";
+                const pSub = dayData.plans[globalSlotIdx];
+                let pClass = "w-full h-full text-[8px] font-bold text-center truncate pointer-events-none select-none transition-all flex items-center justify-center";
+                if (pSub) {
+                    const c = colorPalette[appData.subjectColors[pSub] || 'indigo'];
+                    pClass += ` ${c.bg} text-white shadow-sm`;
+                }
+                planCol.innerHTML = `<div id="plan-${dayKey}-${globalSlotIdx}" class="${pClass}">${pSub || ''}</div>`;
+                
+                // タップ＆なぞりイベント (PointerEvents)
+                planCol.onpointerdown = (e) => { e.preventDefault(); paintTimelineCell(dayKey, globalSlotIdx, 'plan', true); };
+                planCol.onpointerenter = () => paintTimelineCell(dayKey, globalSlotIdx, 'plan');
+                row.appendChild(planCol);
+
+                // 実績 (Actual)
+                const actCol = document.createElement('div');
+                actCol.className = "col-span-5 h-full relative cursor-crosshair paint-cell";
+                const aSub = dayData.actuals[globalSlotIdx];
+                let aClass = "w-full h-full text-[8px] font-bold text-center truncate pointer-events-none select-none transition-all flex items-center justify-center";
+                if (aSub) {
+                    const c = colorPalette[appData.subjectColors[aSub] || 'indigo'];
+                    aClass += ` ${c.bg} text-white shadow-sm`;
+                }
+                actCol.innerHTML = `<div id="actual-${dayKey}-${globalSlotIdx}" class="${aClass}">${aSub || ''}</div>`;
+                
+                actCol.onpointerdown = (e) => { e.preventDefault(); paintTimelineCell(dayKey, globalSlotIdx, 'actual', true); };
+                actCol.onpointerenter = () => paintTimelineCell(dayKey, globalSlotIdx, 'actual');
+                row.appendChild(actCol);
+
+                container.appendChild(row);
+            }
+        }
+
+        // --- 教科実績詳細 & 完了チェック同期 (Daily) ---
+        function renderDailySubjectsList() {
+            const container = document.getElementById('dailySubjectsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const dayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            if (!appData.monthlyProgress[dayKey]) appData.monthlyProgress[dayKey] = {};
+            const progressObj = appData.monthlyProgress[dayKey];
+
+            subjects.forEach(sub => {
+                const c = colorPalette[appData.subjectColors[sub] || 'indigo'];
+                
+                // 実績時間の合計算出
+                let actMins = 0;
+                if (appData.dailyTimelines[dayKey] && appData.dailyTimelines[dayKey].actuals) {
+                    appData.dailyTimelines[dayKey].actuals.forEach(val => { if (val === sub) actMins += 30; });
+                }
+                const hrsNum = (actMins / 60).toFixed(1);
+                const isChecked = progressObj[sub + '_checked'] === 'true' || progressObj[sub + '_checked'] === true;
+
+                const div = document.createElement('div');
+                div.className = "flex flex-col sm:flex-row sm:items-center gap-2 p-2 bg-slate-50 border border-slate-200/60 rounded-lg shadow-sm";
+                div.innerHTML = `
+                    <div class="flex items-center gap-1.5 shrink-0 min-w-[130px]">
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} 
+                            onchange="toggleSubjectCheck('${dayKey}', '${escapeJsString(sub)}', this.checked)"
+                            class="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300">
+                        <button onclick="showColorPicker(event, '${sub}')" class="w-3 h-3 rounded-full ${c.bg} shrink-0 subject-color-dot"></button>
+                        <span class="font-bold text-[11px] truncate text-slate-700 ${isChecked ? 'line-through text-slate-400' : ''}">${sub}</span>
+                        <span class="ml-auto font-mono text-[9px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-full">${hrsNum}h</span>
+                    </div>
+                    <div class="flex-grow">
+                        <input type="text" value="${escapeHtml(progressObj[sub] || '')}"
+                            onchange="updateDailySubjectText('${escapeJsString(sub)}', this.value)"
+                            placeholder="進めた教材名やページ数、内容をメモ（他シートと自動同期）..." 
+                            class="w-full bg-white border border-slate-200 px-2 py-1 text-[10px] rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none text-slate-700 font-bold shadow-sm ${isChecked ? 'line-through text-slate-400' : ''}">
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function toggleSubjectCheck(dayKey, sub, checked) {
+            if (!appData.monthlyProgress[dayKey]) appData.monthlyProgress[dayKey] = {};
+            appData.monthlyProgress[dayKey][sub + '_checked'] = checked;
+            saveAllData(true);
+            renderDailySubjectsList();
+            renderWeeklyView();
+        }
+
+        function updateDailySubjectText(sub, val) {
+            const dayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            if (!appData.monthlyProgress[dayKey]) appData.monthlyProgress[dayKey] = {};
+            appData.monthlyProgress[dayKey][sub] = val;
+            saveAllData(true); 
+            renderWeeklyView();
+        }
+
+        function setEvaluation(val) {
+            const dayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            if (!appData.monthlyProgress[dayKey]) appData.monthlyProgress[dayKey] = {};
+            appData.monthlyProgress[dayKey]['__evaluation'] = val;
+            setEvaluationUI(val);
+            saveAllData(true); 
+        }
+
+        function calculateDailySummary() {
+            const dayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            const dayData = getOrInitDayTimeline(dayKey);
+
+            let planMins = 0;
+            let actMins = 0;
+            dayData.plans.forEach(val => { if (val !== null) planMins += 30; });
+            dayData.actuals.forEach(val => { if (val !== null) actMins += 30; });
+
+            const actualTotalEl = document.getElementById('dailyActualTotal');
+            const cumulativeTotalEl = document.getElementById('dailyCumulativeTotal');
+            if (actualTotalEl) actualTotalEl.innerText = (actMins / 60).toFixed(1);
+            if (cumulativeTotalEl) cumulativeTotalEl.innerText = actMins;
+
+            const progressObj = appData.monthlyProgress[dayKey] || {};
+            const savedPlanInput = document.getElementById('dailyPlannedTotal');
+            if (savedPlanInput) {
+                if (document.activeElement !== savedPlanInput) {
+                    if (!progressObj['__planned_hours'] || progressObj['__planned_hours'] == '0') {
+                        savedPlanInput.value = (planMins / 60).toFixed(1);
+                        progressObj['__planned_hours'] = savedPlanInput.value;
+                    } else {
+                        savedPlanInput.value = progressObj['__planned_hours'] || '';
+                    }
+                } else {
+                    progressObj['__planned_hours'] = savedPlanInput.value;
+                }
+            }
+        }
+
+        // =======================================================
+        // --- 1週間バーチカル学習手帳 (Weekly Vertical - 横並び7日間) ---
+        // =======================================================
+        function renderWeeklyView() {
+            const weekDays = getWeekRange(new Date(currentYear, currentMonth - 1, currentSelectedDay));
+            const monday = weekDays[0];
+            const sunday = weekDays[6];
+            currentWeekKey = getWeekKey(monday);
+
+            // 週の範囲 & 目標 & ふりかえり
+            document.getElementById('weeklyWeekRangeLabel').innerText = `${monday.getFullYear()}/${monday.getMonth() + 1}/${monday.getDate()} 〜 ${sunday.getMonth() + 1}/${sunday.getDate()}`;
+            document.getElementById('weeklyPageMonthLabel').innerText = `${monday.getMonth() + 1}`;
+            document.getElementById('weeklyGoalInput').value = appData.weeklyGoals[currentWeekKey] || '';
+            document.getElementById('weeklyReviewInput').value = appData.weeklyReviews[currentWeekKey] || '';
+
+            // 1. 曜日名ヘッダー列のレンダリング
+            const headersContainer = document.getElementById('weeklyHeadersContainer');
+            if (headersContainer) {
+                headersContainer.innerHTML = '';
+                const template = document.getElementById('weekly-header-template');
+                
+                weekDays.forEach((dayDate, idx) => {
+                    const clone = template.content.cloneNode(true);
+                    const titleEl = clone.querySelector('.day-title');
+                    const wDayJap = ['日', '月', '火', '水', '木', '金', '土'][dayDate.getDay()];
+                    titleEl.innerText = `${dayDate.getMonth() + 1}/${dayDate.getDate()} (${wDayJap})`;
+                    
+                    if (idx === 5) titleEl.className += " text-sky-500 bg-sky-50 rounded px-1"; // 土曜日
+                    if (idx === 6) titleEl.className += " text-rose-500 bg-rose-50 rounded px-1"; // 日曜日
+                    headersContainer.appendChild(clone);
+                });
+            }
+
+            // 2. 左側の固定時間軸(5:00〜24:00)のレンダリング
+            const timeAxis = document.getElementById('weeklyTimeAxis');
+            if (timeAxis) {
+                timeAxis.innerHTML = '';
+                for (let i = 0; i < TOTAL_SLOTS; i++) {
+                    const globalSlotIdx = i + (START_HOUR * 2);
+                    const hr = Math.floor(globalSlotIdx / 2);
+                    const min = globalSlotIdx % 2 === 0 ? "00" : "30";
+                    const row = document.createElement('div');
+                    row.className = "h-6 border-b border-slate-200 flex items-center justify-center font-bold text-[8px]";
+                    row.innerText = min === "00" ? `${hr}:00` : "";
+                    timeAxis.appendChild(row);
+                }
+            }
+
+            // 3. 7日間分のバーチカルグリッドカラム (Plans/Actuals)
+            const columnsWrapper = document.getElementById('weeklyColumnsWrapper');
+            if (columnsWrapper) {
+                columnsWrapper.innerHTML = '';
+                
+                weekDays.forEach(dayDate => {
+                    const dayY = dayDate.getFullYear();
+                    const dayM = dayDate.getMonth() + 1;
+                    const dayD = dayDate.getDate();
+                    const dayKey = `${dayY}-${dayM}-${dayD}`;
+                    const dayData = getOrInitDayTimeline(dayKey);
+
+                    // 1日分のダブルカラムコンテナ (Plan & Actual)
+                    const dayCol = document.createElement('div');
+                    dayCol.className = "grid grid-cols-2 divide-x divide-slate-100 select-none";
+
+                    // Plan (予定) の一連のスロット
+                    const planSubCol = document.createElement('div');
+                    planSubCol.className = "flex flex-col divide-y divide-slate-100 h-full border-r";
+
+                    // Actual (実績) の一連のスロット
+                    const actSubCol = document.createElement('div');
+                    actSubCol.className = "flex flex-col divide-y divide-slate-100 h-full";
+
+                    for (let i = 0; i < TOTAL_SLOTS; i++) {
+                        const globalSlotIdx = i + (START_HOUR * 2);
+                        
+                        // Planセル
+                        const pSub = dayData.plans[globalSlotIdx];
+                        const cellPlan = document.createElement('div');
+                        cellPlan.className = "h-6 relative cursor-crosshair paint-cell border-b border-slate-100";
+                        let pClass = "w-full h-full text-[8px] font-bold text-center truncate pointer-events-none select-none transition-all flex items-center justify-center";
+                        if (pSub) {
+                            const c = colorPalette[appData.subjectColors[pSub] || 'indigo'];
+                            pClass += ` ${c.bg} text-white shadow-inner`;
+                        }
+                        cellPlan.innerHTML = `<div id="plan-${dayKey}-${globalSlotIdx}" class="${pClass}">${pSub || ''}</div>`;
+                        
+                        cellPlan.onpointerdown = (e) => { e.preventDefault(); paintTimelineCell(dayKey, globalSlotIdx, 'plan', true); };
+                        cellPlan.onpointerenter = () => paintTimelineCell(dayKey, globalSlotIdx, 'plan');
+                        planSubCol.appendChild(cellPlan);
+
+                        // Actualセル
+                        const aSub = dayData.actuals[globalSlotIdx];
+                        const cellAct = document.createElement('div');
+                        cellAct.className = "h-6 relative cursor-crosshair paint-cell border-b border-slate-100";
+                        let aClass = "w-full h-full text-[8px] font-bold text-center truncate pointer-events-none select-none transition-all flex items-center justify-center";
+                        if (aSub) {
+                            const c = colorPalette[appData.subjectColors[aSub] || 'indigo'];
+                            aClass += ` ${c.bg} text-white shadow-inner`;
+                        }
+                        cellAct.innerHTML = `<div id="actual-${dayKey}-${globalSlotIdx}" class="${aClass}">${aSub || ''}</div>`;
+                        
+                        cellAct.onpointerdown = (e) => { e.preventDefault(); paintTimelineCell(dayKey, globalSlotIdx, 'actual', true); };
+                        cellAct.onpointerenter = () => paintTimelineCell(dayKey, globalSlotIdx, 'actual');
+                        actSubCol.appendChild(cellAct);
+                    }
+
+                    dayCol.appendChild(planSubCol);
+                    dayCol.appendChild(actSubCol);
+                    columnsWrapper.appendChild(dayCol);
+                });
+            }
+
+            // 今週の総時間の集計
+            let weekTotalMins = 0;
+            weekDays.forEach(dayDate => {
+                const dayKey = `${dayDate.getFullYear()}-${dayDate.getMonth() + 1}-${dayDate.getDate()}`;
+                const dayData = getOrInitDayTimeline(dayKey);
+                dayData.actuals.forEach(val => { if (val !== null) weekTotalMins += 30; });
+            });
+            const weekHrs = Math.floor(weekTotalMins / 60);
+            const weekMins = weekTotalMins % 60;
+            document.getElementById('weeklyTotalTimeLabel').innerText = `${weekHrs}h ${weekMins.toString().padStart(2, '0')}m`;
+
+            renderBrushPalette();
+            safeCreateIcons();
+        }
+
+        function navigateWeeklyWeek(dir) {
+            const date = new Date(currentYear, currentMonth - 1, currentSelectedDay);
+            date.setDate(date.getDate() + (dir * 7));
+            currentYear = date.getFullYear();
+            currentMonth = date.getMonth() + 1;
+            currentSelectedDay = date.getDate();
+            updateGlobalMonthUI();
+            renderWeeklyView();
+        }
+
+        // --- タイマー処理 ---
+        function renderTimerPresets() {
+            const container = document.getElementById('customTimerSlotsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            const activeSlots = (timerStateMode === 'focus') ? appData.timerSlotsFocus : appData.timerSlotsBreak;
+
+            activeSlots.forEach((slot, index) => {
+                const isSelected = (timerSecondsTotal === slot.mins * 60);
+                const isEditing = (editingTimerSlotIndex === index);
+
+                const card = document.createElement('div');
+                card.className = `p-2 rounded-lg border transition-all ${
+                    isSelected 
+                    ? (timerStateMode === 'focus' ? 'bg-indigo-50 border-indigo-300 shadow-sm' : 'bg-emerald-50 border-emerald-300 shadow-sm')
+                    : 'bg-slate-50 hover:bg-slate-100/50 border-slate-200'
+                }`;
+
+                if (isEditing) {
+                    card.innerHTML = `
+                        <div class="space-y-1.5 text-[10px]">
+                            <input type="text" id="editSlotLabel-${index}" value="${escapeHtml(slot.label)}" class="w-full bg-white border rounded p-1 text-[10px] font-bold">
+                            <input type="number" id="editSlotMins-${index}" value="${slot.mins}" min="1" max="999" class="w-full bg-white border rounded p-1 text-[10px] font-mono font-bold">
+                            <div class="flex justify-end gap-1">
+                                <button onclick="cancelEditingTimerSlot()" class="px-2 py-0.5 bg-slate-200 rounded">戻る</button>
+                                <button onclick="saveTimerSlot(${index})" class="px-2 py-0.5 bg-indigo-600 text-white rounded">決定</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const badge = (timerStateMode === 'focus') 
+                        ? `<span class="bg-indigo-100 text-indigo-700 text-[8px] font-bold px-1 py-0.2 rounded shrink-0">集中</span>` 
+                        : `<span class="bg-emerald-100 text-emerald-700 text-[8px] font-bold px-1 py-0.2 rounded shrink-0">休憩</span>`;
+
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between gap-1">
+                            <div onclick="applyTimerSlot(${index})" class="flex-grow flex items-center justify-between min-w-0 cursor-pointer">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    ${badge}
+                                    <span class="font-bold text-[11px] text-slate-700 truncate">${escapeHtml(slot.label)}</span>
+                                </div>
+                                <span class="font-mono bg-white px-1.5 py-0.2 rounded border text-[9px] font-bold text-slate-500 shrink-0">${slot.mins}分</span>
+                            </div>
+                            <button onclick="startEditingTimerSlot(${index}, event)" class="p-1 text-slate-300 hover:text-slate-600 rounded shrink-0">
+                                <i data-lucide="edit-3" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+                container.appendChild(card);
+            });
+            updateTimerSummaryLabel();
+            safeCreateIcons();
+        }
+
+        function startEditingTimerSlot(index, e) {
+            e.stopPropagation();
+            editingTimerSlotIndex = index;
+            renderTimerPresets();
+        }
+
+        function cancelEditingTimerSlot() {
+            editingTimerSlotIndex = null;
+            renderTimerPresets();
+        }
+
+        function saveTimerSlot(index) {
+            const labelInput = document.getElementById(`editSlotLabel-${index}`);
+            const minsInput = document.getElementById(`editSlotMins-${index}`);
+            if (!labelInput || !minsInput) return;
+
+            const label = labelInput.value.trim();
+            const mins = parseInt(minsInput.value);
+
+            if (!label || isNaN(mins) || mins <= 0) {
+                alert("正しい設定を入力してください。");
+                return;
+            }
+
+            if (timerStateMode === 'focus') {
+                appData.timerSlotsFocus[index] = { label, mins };
+            } else {
+                appData.timerSlotsBreak[index] = { label, mins };
+            }
+
+            editingTimerSlotIndex = null;
+            saveAllData(); 
+            renderTimerPresets();
+            applyTimerSlot(index);
+        }
+
+        function applyTimerSlot(index) {
+            const activeSlots = (timerStateMode === 'focus') ? appData.timerSlotsFocus : appData.timerSlotsBreak;
+            const slot = activeSlots[index];
+            if (!slot) return;
+            const matched = subjects.find(s => s.toLowerCase() === slot.label.toLowerCase());
+            if (matched && timerStateMode === 'focus') {
+                timerSubjectSelected = matched;
+                renderTimerClassifications();
+            }
+            setTimerDuration(slot.mins);
+        }
+
+        function setTimerDuration(mins) {
+            timerSecondsTotal = mins * 60;
+            timerSecondsLeft = timerSecondsTotal;
+            timerIsOvertime = false;
+            timerOvertimeSeconds = 0;
+            updateTimerDisplay();
+            updateTimerSummaryLabel();
+        }
+
+        function setTimerStateMode(mode) {
+            timerStateMode = mode;
+            document.getElementById('timerModeFocusBtn').className = mode === 'focus' ? "flex-grow py-1.5 text-[10px] font-black rounded-lg bg-indigo-600 text-white shadow-sm transition-all" : "flex-grow py-1.5 text-[10px] font-bold rounded-lg text-slate-600 hover:text-slate-800 transition-all";
+            document.getElementById('timerModeBreakBtn').className = mode === 'break' ? "flex-grow py-1.5 text-[10px] font-black rounded-lg bg-emerald-600 text-white shadow-sm transition-all" : "flex-grow py-1.5 text-[10px] font-bold rounded-lg text-slate-600 hover:text-slate-800 transition-all";
+            
+            editingTimerSlotIndex = null;
+            renderTimerPresets();
+            renderTimerClassifications();
+            
+            const active = mode === 'focus' ? appData.timerSlotsFocus[0] : appData.timerSlotsBreak[0];
+            if (active) setTimerDuration(active.mins);
+        }
+
+        function renderTimerClassifications() {
+            const container = document.getElementById('classificationListContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            subjects.forEach(sub => {
+                const isSelected = (timerSubjectSelected === sub);
+                const c = colorPalette[appData.subjectColors[sub] || 'indigo'];
+                const btn = document.createElement('button');
+                btn.className = `p-1.5 rounded-lg text-[10px] flex items-center gap-1 transition-all border ${isSelected ? 'bg-slate-100 border-slate-300 font-bold text-slate-800' : 'hover:bg-slate-50 text-slate-600 border-transparent'}`;
+                btn.innerHTML = `
+                    <span class="w-2 h-2 rounded-full ${c.bg}"></span>
+                    <span class="truncate">${sub}</span>
+                `;
+                btn.onclick = () => {
+                    timerSubjectSelected = sub;
+                    renderTimerClassifications();
+                    updateTimerSummaryLabel();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function updateTimerSummaryLabel() {
+            const mins = Math.round(timerSecondsTotal / 60);
+            const mLabel = timerStateMode === 'focus' ? '集中' : '休憩';
+            const lblMode = document.getElementById('summaryModeLabel');
+            if (lblMode) {
+                lblMode.innerText = `${mLabel} [${mins}分]`;
+                lblMode.className = timerStateMode === 'focus' ? "text-indigo-600" : "text-emerald-600";
+            }
+            const lblSubject = document.getElementById('summarySubjectLabel');
+            if (lblSubject) {
+                lblSubject.innerText = timerStateMode === 'focus' ? timerSubjectSelected : '（休憩）';
+            }
+        }
+
+        function updateTimerDisplay() {
+            if (timerIsOvertime) {
+                const m = Math.floor(timerOvertimeSeconds / 60).toString().padStart(2, '0');
+                const s = (timerOvertimeSeconds % 60).toString().padStart(2, '0');
+                const str = `+${m}:${s}`;
+                
+                document.getElementById('bigTimerDisplay').innerText = str;
+                document.getElementById('bigTimerDisplay').className = "font-mono text-4xl sm:text-5xl font-black tracking-widest text-rose-500 block animate-pulse";
+                document.getElementById('fullscreenDigits').innerText = str;
+                document.getElementById('fullscreenDigits').className = "font-mono text-3xl sm:text-4xl font-black text-rose-500 tracking-widest block";
+                document.getElementById('fullscreenPercentage').innerText = "OVERTIME RECORDING...";
+                document.getElementById('fullscreenPercentage').className = "text-[8px] font-black text-rose-500 block animate-pulse";
+
+                document.getElementById('mainTimerOvertimeLabel').classList.remove('hidden');
+                const ring = document.getElementById('fullscreenProgressRing');
+                if (ring) {
+                    ring.className = "stroke-rose-500 transition-all";
+                    ring.style.strokeDashoffset = 0;
+                }
+            } else {
+                const m = Math.floor(timerSecondsLeft / 60).toString().padStart(2, '0');
+                const s = (timerSecondsLeft % 60).toString().padStart(2, '0');
+                const str = `${m}:${s}`;
+                
+                document.getElementById('bigTimerDisplay').innerText = str;
+                document.getElementById('bigTimerDisplay').className = "font-mono text-4xl sm:text-5xl font-black tracking-widest text-slate-100 block";
+                document.getElementById('fullscreenDigits').innerText = str;
+                document.getElementById('fullscreenDigits').className = "font-mono text-3xl sm:text-4xl font-black text-slate-100 tracking-widest block";
+
+                document.getElementById('mainTimerOvertimeLabel').classList.add('hidden');
+                const ring = document.getElementById('fullscreenProgressRing');
+                const percent = timerSecondsTotal > 0 ? (timerSecondsLeft / timerSecondsTotal) : 0;
+                const offset = 800 - (800 * percent);
+                
+                if (ring) {
+                    ring.style.strokeDashoffset = offset;
+                    ring.className = timerStateMode === 'focus' ? "stroke-indigo-500 transition-all" : "stroke-emerald-500 transition-all";
+                }
+                
+                document.getElementById('fullscreenPercentage').innerText = `${Math.ceil(percent * 100)}% REMAINING`;
+                document.getElementById('fullscreenPercentage').className = "text-[8px] font-black text-slate-500 block";
+            }
+        }
+
+        function startAlarmLoop() {
+            if (alarmIntervalId) return;
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const playTone = () => {
+                try {
+                    if (audioCtx.state === 'suspended') audioCtx.resume();
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+                    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.15); // C5
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.49);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.5);
+                } catch (e) {}
+            };
+            playTone();
+            alarmIntervalId = setInterval(playTone, 1000);
+        }
+
+        function stopAlarmLoop() {
+            if (alarmIntervalId) {
+                clearInterval(alarmIntervalId);
+                alarmIntervalId = null;
+            }
+        }
+
+        function stopGlobalTimerInterval() {
+            if (timerIntervalId) {
+                clearInterval(timerIntervalId);
+                timerIntervalId = null;
+            }
+            timerIsRunning = false;
+        }
+
+        function startFullscreenTimer() {
+            document.getElementById('fullscreenTimerOverlay').classList.remove('hidden');
+            const labelEl = document.getElementById('fullscreenSubjectLabel');
+            
+            if (!timerIsOvertime) {
+                if (timerStateMode === 'focus') {
+                    if (labelEl) {
+                        labelEl.innerText = `${timerSubjectSelected} 集中時間`;
+                        labelEl.className = "text-xs font-black text-indigo-400 tracking-wider";
+                    }
+                    document.getElementById('fullscreenInspiringMessage').innerText = "スマートフォンを置いて、自分だけの特別な学習時間に集中しましょう。";
+                } else {
+                    if (labelEl) {
+                        labelEl.innerText = `リフレッシュ休憩`;
+                        labelEl.className = "text-xs font-black text-emerald-400 tracking-wider";
+                    }
+                    document.getElementById('fullscreenInspiringMessage').innerText = "しっかり脳を休めましょう。お疲れ様でした！";
+                }
+            }
+
+            timerIsRunning = true;
+            updatePlayPauseIconUI();
+            
+            if (!timerIntervalId) {
+                timerIntervalId = setInterval(() => {
+                    if (timerSecondsLeft > 0) {
+                        timerSecondsLeft--;
+                        updateTimerDisplay();
+                    } else {
+                        if (!timerIsOvertime) {
+                            timerIsOvertime = true;
+                            timerOvertimeSeconds = 0;
+                            startAlarmLoop();
+                        }
+                        timerOvertimeSeconds++;
+                        updateTimerDisplay();
+                    }
+                }, 1000);
+            }
+            updateTimerDisplay();
+        }
+
+        function toggleFullscreenTimer() {
+            if (timerIsRunning) {
+                timerIsRunning = false;
+                if (timerIntervalId) {
+                    clearInterval(timerIntervalId);
+                    timerIntervalId = null;
+                }
+                stopAlarmLoop(); 
+            } else {
+                timerIsRunning = true;
+                if (timerIsOvertime) startAlarmLoop(); 
+                timerIntervalId = setInterval(() => {
+                    if (timerSecondsLeft > 0) {
+                        timerSecondsLeft--;
+                        updateTimerDisplay();
+                    } else {
+                        if (!timerIsOvertime) {
+                            timerIsOvertime = true;
+                            timerOvertimeSeconds = 0;
+                            startAlarmLoop();
+                        }
+                        timerOvertimeSeconds++;
+                        updateTimerDisplay();
+                    }
+                }, 1000);
+            }
+            updatePlayPauseIconUI();
+        }
+
+        function updatePlayPauseIconUI() {
+            const icon = document.getElementById('fullscreenPlayIcon');
+            if (icon) {
+                icon.setAttribute('data-lucide', timerIsRunning ? 'pause' : 'play');
+            }
+            safeCreateIcons();
+        }
+
+        function resetFullscreenTimer() {
+            openCustomConfirm({
+                title: 'タイマーのやり直し',
+                message: '最初からタイマーをやり直しますか？',
+                icon: 'rotate-ccw',
+                colorClass: 'indigo',
+                okText: 'やり直す',
+                onConfirm: () => {
+                    stopAlarmLoop();
+                    timerIsOvertime = false;
+                    timerOvertimeSeconds = 0;
+                    timerSecondsLeft = timerSecondsTotal;
+                    updateTimerDisplay();
+                }
+            });
+        }
+
+        function quitFullscreenTimerConfirm() {
+            openCustomConfirm({
+                title: 'タイマーの中断',
+                message: 'タイマーを終了して戻りますか？（実績は自動追加されません）',
+                icon: 'alert-circle',
+                colorClass: 'rose',
+                okText: '中断する',
+                onConfirm: () => {
+                    stopGlobalTimerInterval();
+                    stopAlarmLoop();
+                    timerIsOvertime = false;
+                    timerOvertimeSeconds = 0;
+                    document.getElementById('fullscreenTimerOverlay').classList.add('hidden');
+                    updateTimerDisplay();
+                }
+            });
+        }
+
+        function forceCompleteTimerConfirm() {
+            let passedMins = 0;
+            if (timerIsOvertime) {
+                passedMins = Math.floor((timerSecondsTotal + timerOvertimeSeconds) / 60);
+            } else {
+                passedMins = Math.floor((timerSecondsTotal - timerSecondsLeft) / 60);
+            }
+
+            openCustomConfirm({
+                title: '実績の登録',
+                message: `これまでの計測実績（${passedMins}分）を本日の手帳に登録しますか？`,
+                icon: 'check-circle',
+                colorClass: 'emerald',
+                okText: '登録して終了',
+                onConfirm: () => {
+                    stopGlobalTimerInterval();
+                    stopAlarmLoop();
+                    document.getElementById('fullscreenTimerOverlay').classList.add('hidden');
+                    
+                    if (timerStateMode === 'focus' && passedMins > 0) {
+                        injectMinutesToDailyGrid(timerSubjectSelected, passedMins);
+                    } else {
+                        showToast("⏱️ タイマーを完了しました。");
+                    }
+                    
+                    const completedMode = timerStateMode;
+                    timerIsOvertime = false;
+                    timerOvertimeSeconds = 0;
+                    timerSecondsLeft = timerSecondsTotal;
+                    updateTimerDisplay();
+
+                    if (appData.pomodoroAutoLoop) {
+                        setTimeout(() => {
+                            if (completedMode === 'focus') {
+                                showToast("🔄 休憩セッションを自動開始します。");
+                                setTimerStateMode('break');
+                            } else {
+                                showToast("🔄 集中セッションを自動開始します。");
+                                setTimerStateMode('focus');
+                            }
+                            startFullscreenTimer();
+                        }, 800);
+                    }
+                }
+            });
+        }
+
+        function injectMinutesToDailyGrid(subName, mins) {
+            const dayKey = `${currentYear}-${currentMonth}-${currentSelectedDay}`;
+            const dayData = getOrInitDayTimeline(dayKey);
+            
+            let cellsNeeded = Math.ceil(mins / 30);
+            let actuals = dayData.actuals;
+            
+            let injectedCount = 0;
+            // 9:00(スロット18)以降の空きマスへ充填
+            for (let i = 18; i < 48; i++) {
+                if (actuals[i] === null) {
+                    actuals[i] = subName;
+                    injectedCount++;
+                    if (injectedCount >= cellsNeeded) break;
+                }
+            }
+            if (injectedCount < cellsNeeded) {
+                for (let i = 0; i < 18; i++) {
+                    if (actuals[i] === null) {
+                        actuals[i] = subName;
+                        injectedCount++;
+                        if (injectedCount >= cellsNeeded) break;
+                    }
+                }
+            }
+            
+            if (!appData.monthlyProgress[dayKey]) appData.monthlyProgress[dayKey] = {};
+            if (!appData.monthlyProgress[dayKey][subName]) {
+                appData.monthlyProgress[dayKey][subName] = `タイマー学習計 ${mins}分`;
+            }
+            
+            initApp();
+            saveAllData(); 
+        }
+
+        // --- Chart.js 制御 ---
+        function initCharts() {
+            const pieCanvas = document.getElementById('subjectPieChart');
+            if (pieCanvas) {
+                const ctxPie = pieCanvas.getContext('2d');
+                if (pieChartInstance) pieChartInstance.destroy();
+                pieChartInstance = new Chart(ctxPie, {
+                    type: 'doughnut',
+                    data: { labels: [], datasets: [{ data: [], backgroundColor: [] }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } }
+                    }
+                });
+            }
+
+            const trendCanvas = document.getElementById('dailyTrendChart');
+            if (trendCanvas) {
+                const ctxTrend = trendCanvas.getContext('2d');
+                if (trendChartInstance) trendChartInstance.destroy();
+                trendChartInstance = new Chart(ctxTrend, {
+                    type: 'bar',
+                    data: { labels: [], datasets: [] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { grid: { display: false }, ticks: { font: { size: 8 } } },
+                            y: { beginAtZero: true, ticks: { font: { size: 8 } } }
+                        },
+                        plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, font: { size: 9 } } } }
+                    }
+                });
+            }
+            updateCharts();
+        }
+
+        function setTrendViewMode(mode) {
+            trendViewMode = mode;
+            document.getElementById('trendModeWeek').className = mode === 'week' ? "px-2.5 py-1 text-[10px] font-bold rounded bg-white text-slate-800 shadow-sm transition-all" : "px-2.5 py-1 text-[10px] font-bold rounded text-slate-500 transition-all";
+            document.getElementById('trendModeMonth').className = mode === 'month' ? "px-2.5 py-1 text-[10px] font-bold rounded bg-white text-slate-800 shadow-sm transition-all" : "px-2.5 py-1 text-[10px] font-bold rounded text-slate-500 transition-all";
+            document.getElementById('trendModeYear').className = mode === 'year' ? "px-2.5 py-1 text-[10px] font-bold rounded bg-white text-slate-800 shadow-sm transition-all" : "px-2.5 py-1 text-[10px] font-bold rounded text-slate-500 transition-all";
+            updateCharts();
+        }
+
+        function updateCharts() {
+            if (!pieChartInstance || !trendChartInstance) return;
+
+            const daysCount = getDaysInMonth(currentYear, currentMonth);
+            let subjectMinsMap = {};
+            subjects.forEach(s => subjectMinsMap[s] = 0);
+
+            for (let d = 1; d <= daysCount; d++) {
+                const dayKey = `${currentYear}-${currentMonth}-${d}`;
+                const dayData = appData.dailyTimelines[dayKey];
+                if (dayData && dayData.actuals) {
+                    dayData.actuals.forEach(val => {
+                        if (val && subjectMinsMap[val] !== undefined) subjectMinsMap[val] += 30;
+                    });
+                }
+            }
+
+            let labels = [];
+            let data = [];
+            let bgColors = [];
+            subjects.forEach(sub => {
+                labels.push(sub);
+                data.push(subjectMinsMap[sub]);
+                bgColors.push(colorPalette[appData.subjectColors[sub] || 'indigo'].dot);
+            });
+
+            if (data.every(v => v === 0)) {
+                labels = ["データなし"];
+                data = [1];
+                bgColors = ["#e2e8f0"];
+            }
+
+            pieChartInstance.data.labels = labels;
+            pieChartInstance.data.datasets[0].data = data;
+            pieChartInstance.data.datasets[0].backgroundColor = bgColors;
+            pieChartInstance.update();
+
+            // 推移グラフ
+            if (trendViewMode === 'month') {
+                let xLabels = [];
+                let datasetsMap = {};
+                subjects.forEach(sub => datasetsMap[sub] = Array(daysCount).fill(0));
+
+                for (let d = 1; d <= daysCount; d++) {
+                    xLabels.push(`${d}`);
+                    const dayKey = `${currentYear}-${currentMonth}-${d}`;
+                    const dayData = appData.dailyTimelines[dayKey];
+                    if (dayData && dayData.actuals) {
+                        dayData.actuals.forEach(val => {
+                            if (val && datasetsMap[val]) datasetsMap[val][d - 1] += 30;
+                        });
+                    }
+                }
+                trendChartInstance.data.labels = xLabels;
+                trendChartInstance.data.datasets = subjects.map(sub => ({
+                    label: sub,
+                    data: datasetsMap[sub],
+                    backgroundColor: colorPalette[appData.subjectColors[sub] || 'indigo'].dot,
+                    borderRadius: 2
+                }));
+            } else if (trendViewMode === 'week') {
+                let xLabels = [];
+                let datasetsMap = {};
+                subjects.forEach(sub => datasetsMap[sub] = Array(7).fill(0));
+
+                for (let i = 6; i >= 0; i--) {
+                    let targetDate = new Date(currentYear, currentMonth - 1, currentSelectedDay - i);
+                    let tM = targetDate.getMonth() + 1;
+                    let tD = targetDate.getDate();
+                    xLabels.push(`${tM}/${tD}`);
+                    const dayKey = `${targetDate.getFullYear()}-${tM}-${tD}`;
+                    const dayData = appData.dailyTimelines[dayKey];
+                    if (dayData && dayData.actuals) {
+                        dayData.actuals.forEach(val => {
+                            if (val && datasetsMap[val]) datasetsMap[val][6 - i] += 30;
+                        });
+                    }
+                }
+                trendChartInstance.data.labels = xLabels;
+                trendChartInstance.data.datasets = subjects.map(sub => ({
+                    label: sub,
+                    data: datasetsMap[sub],
+                    backgroundColor: colorPalette[appData.subjectColors[sub] || 'indigo'].dot,
+                    borderRadius: 3
+                }));
+            } else if (trendViewMode === 'year') {
+                let xLabels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+                let datasetsMap = {};
+                subjects.forEach(sub => datasetsMap[sub] = Array(12).fill(0));
+
+                for (let m = 1; m <= 12; m++) {
+                    const daysInM = getDaysInMonth(currentYear, m);
+                    for (let d = 1; d <= daysInM; d++) {
+                        const dayKey = `${currentYear}-${m}-${d}`;
+                        const dayData = appData.dailyTimelines[dayKey];
+                        if (dayData && dayData.actuals) {
+                            dayData.actuals.forEach(val => {
+                                if (val && datasetsMap[val]) datasetsMap[val][m - 1] += 30;
+                            });
+                        }
+                    }
+                }
+                trendChartInstance.data.labels = xLabels;
+                trendChartInstance.data.datasets = subjects.map(sub => ({
+                    label: sub,
+                    data: datasetsMap[sub],
+                    backgroundColor: colorPalette[appData.subjectColors[sub] || 'indigo'].dot,
+                    borderRadius: 3
+                }));
+            }
+            trendChartInstance.update();
+        }
+
+        // --- ユーティリティ ---
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+        function escapeJsString(str) {
+            if (!str) return '';
+            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+    </script>
+</body>
+</html>
